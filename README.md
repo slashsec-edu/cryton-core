@@ -10,7 +10,7 @@
 	- [Shell](#shell)
 
 <!-- /TOC -->
-![Coverage](https://gitlab.ics.muni.cz/cryton/cryton-oop/badges/master/coverage.svg)
+![Coverage](https://gitlab.ics.muni.cz/beast-public/cryton/cryton-oop/badges/master/coverage.svg)
 # Name
 **Cryton** - Breach Emulation & Attack Simulation Toolset
 
