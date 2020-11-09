@@ -1,0 +1,94 @@
+image: python:3.7-stretch
+
+services:
+  - name: postgres:latest
+    alias: postgres
+  - name: rabbitmq:3.8.5-management
+    alias: cryton_rabbit
+
+
+variables:
+  POSTGRES_DB: cryton
+  POSTGRES_USER: cryton
+  POSTGRES_PASSWORD: cryton
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  RABBITMQ_DEFAULT_USER: admin
+  RABBITMQ_DEFAULT_PASS: mypass
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+before_script:
+  - python --version
+  - pip install virtualenv
+  - virtualenv venv
+  - for i in `cat .env`; do echo export $i >> .env-bash; done; source .env-bash;
+  - export CRYTON_DB_HOST=postgres
+  - source venv/bin/activate
+  - python setup.py install
+  - python setup.py develop
+
+stages:
+  - dbtest
+  - rabbittest
+  - unittests
+  - integrationtests
+#  - buildPython
+
+dbtest:
+  image: postgres
+  stage: dbtest
+  before_script:
+    - which psql
+    - hostname
+  script:
+    - export PGPASSWORD=$POSTGRES_PASSWORD
+    - psql -h "postgres" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 'OK' AS status;"
+
+rabbittest:
+  image: rabbitmq
+  stage: rabbittest
+  before_script:
+    - rabbitmq-server &
+  script:
+    - ps aux
+    - getent hosts
+
+unittests:
+  stage: unittests
+  artifacts:
+    paths:
+      - .cache/pip
+      - venv
+  script:
+    - sed -i.bak s/DOCKER\ =\ False/DOCKER\ =\ True/g cryton/settings.py
+    - sed -i.bak s/"dev\/log"/"var\/log\/dpkg.log"/g cryton/etc/logging_config.yaml
+    - pytest --cov=cryton tests/unit_tests/ --cov-config=.coveragerc-unit
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+
+integrationtests:
+  stage: integrationtests
+  artifacts:
+    paths:
+      - .cache/pip
+      - venv
+  script:
+    - sed -i.bak s/DOCKER\ =\ False/DOCKER\ =\ True/g cryton/settings.py
+    - sed -i.bak s/"dev\/log"/"var\/log\/dpkg.log"/g cryton/etc/logging_config.yaml
+    - pytest --cov=cryton tests/integration_tests/ --cov-config=.coveragerc-integration
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+
+#buildPython:
+#    stage: buildPython
+#    script:
+#      - python3 setup.py bdist_wheel
+#    artifacts:
+#      paths:
+#        - dist
+#        - .cache/pip
+#        - venv/
+#      expire_in: 10 mins
+
+

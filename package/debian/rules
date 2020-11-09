@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+#DH_VERBOSE = 1
+# see EXAMPLES in dpkg-buildflags(1) and read /usr/share/dpkg/*
+DPKG_EXPORT_BUILDFLAGS = 1
+
+PROJECT_NAME=cryton
+PACKAGE_NAME=cryton
+PROJECT_DIR=/opt/cryton/
+
+%:
+#	dh $@ --with python3 --buildsystem=pybuild
+	dh $@
+

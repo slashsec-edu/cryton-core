@@ -1,0 +1,14 @@
+Source: cryton
+Section: misc
+Priority: optional
+Maintainer: Ivo Nutar <nutar@ics.muni.cz>
+Build-Depends: python3 (>= 3.6.0), debhelper (>= 9)
+Standards-Version: 3.9.8
+X-Python-Versions: 3.7
+
+Package: cryton
+Architecture: any
+Depends: python3 (>= 3.7.0), python3-pip, postgresql, libpq5, libpq-dev ${misc:Depends}
+Description: Installation of Cryton core
+ this is a long description
+

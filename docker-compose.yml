@@ -1,0 +1,97 @@
+version: '3'
+services:
+  cryton_db:
+    image: postgres
+    restart: always
+    container_name: "cryton_db"
+    environment:
+      POSTGRES_PASSWORD: cryton
+      POSTGRES_USER: cryton
+      POSTGRES_DB: cryton
+    expose:
+      - "5432"
+  cryton_pgbouncer:
+    image: edoburu/pgbouncer
+    restart: always
+    container_name: "cryton_pgbouncer"
+    depends_on:
+      - cryton_db
+    environment:
+      DB_HOST: cryton_db
+      DB_USER: cryton
+      DB_NAME: cryton
+      DB_PASSWORD: cryton
+      MAX_CLIENT_CONN: 5000
+      DEFAULT_POOL_SIZE: 8
+      MIN_POOL_SIZE: 8
+      POOL_MODE: transaction
+    expose:
+      - "5432"
+  cryton_app:
+    restart: always
+    build: .
+    image: cryton
+    expose:
+      - "8000"
+    container_name: "cryton_app"
+    depends_on:
+      - cryton_db
+    ports:
+      - '127.0.0.1:8000:8000'
+    volumes:
+      - ./:/app
+      - /dev/log:/dev/log
+    entrypoint: ["cryton-manage", "runserver", "0.0.0.0:8000"]
+    env_file:
+      - .env
+  cryton_scheduler:
+    restart: always
+    image: cryton # No build directory, just reuse that image
+    container_name: "cryton_scheduler"
+    env_file:
+      - .env
+    expose:
+      - $CRYTON_SCHEDULER_LPORT
+    depends_on:
+      - cryton_db
+    volumes:
+      - ./:/app
+      - /dev/log:/dev/log
+    entrypoint: ["cryton-manage", "startscheduler"]
+
+  cryton_rabbit:
+    hostname: cryton_rabbit
+    image: rabbitmq:3.8.5-management
+    container_name: "cryton_rabbit"
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_DEFAULT_USER: ${CRYTON_RABBIT_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${CRYTON_RABBIT_PASSWORD}
+    ports:
+      - "5672:5672"
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: rabbitmqctl eval '
+        { true, rabbit_app_booted_and_running } = { rabbit:is_booted(node()), rabbit_app_booted_and_running },
+        { [], no_alarms } = { rabbit:alarms(), no_alarms },
+        [] /= rabbit_networking:active_listeners(),
+        rabbitmq_node_is_healthy.
+        ' || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  cryton_listener:
+    restart: always
+    image: cryton # No build directory, just reuse that image
+    container_name: "cryton_listener"
+    depends_on:
+      - cryton_db
+      - cryton_rabbit
+    volumes:
+      - ./:/app
+      - /dev/log:/dev/log
+    entrypoint: ["cryton-manage", "startlistener"]
+    env_file:
+      - .env

@@ -1,0 +1,8 @@
+../dist/cryton-1.0-py3-none-any.whl /opt/cryton
+../cryton/etc/logging_config.yaml /etc/cryton
+../cryton/etc/config.ini /etc/cryton
+../cryton/etc/templates/ /etc/cryton
+../tests /opt/cryton/
+../Pipfile /opt/cryton
+../Pipfile.lock /opt/cryton
+
