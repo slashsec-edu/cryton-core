@@ -25,7 +25,7 @@ from cryton.cryton_rest_api.models import (
     StepExecutionModel,
     StageExecutionModel,
     PlanExecutionModel,
-    SuccessorModel
+    DependencyModel
 )
 
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -231,6 +231,13 @@ class TestStage(TestCase):
         reachable = stage.Stage._dfs_reachable(set(), set(), graph, '1')
         self.assertEqual({'1', '2', '3', '4'}, reachable)
 
+    def test_add_dependency(self):
+        dependency = baker.make(StageModel)
+        new_dependency_id = self.stage_obj.add_dependency(dependency.id)
+        dependency_instance = DependencyModel.objects.get(id=new_dependency_id)
+        self.assertEqual(self.stage_obj.model.id, dependency_instance.stage_model_id)
+        self.assertEqual(dependency.id, dependency_instance.dependency_id)
+
 @patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
 @patch('cryton.lib.states.StageStateMachine.validate_transition', MagicMock())
 @patch('cryton.lib.states.StageStateMachine.validate_state', MagicMock())
@@ -352,13 +359,28 @@ class TestStageExecute(TestCase):
     @patch('django.db.connections.close_all', MagicMock)
     @patch('cryton.lib.util.rm_path', MagicMock)
     def test_execute(self):
-
         with patch.object(stage.StageExecution, 'state') as mock_state:
             mock_state.__get__ = Mock(side_effect=['PENDING', 'RUNNING', 'FINISHED'])
             with self.assertLogs('cryton-debug', level='INFO') as cm:
                 self.stage_ex_obj.execute()
 
         self.assertIn("stagexecution executed", cm.output[0])
+
+    @patch('multiprocessing.Process', MagicMock)
+    @patch('threading.Thread', MagicMock)
+    @patch('cryton.lib.util.split_into_lists', MagicMock(items=[]))
+    @patch('cryton.etc.config.CRYTON_CPU_CORES', 0)
+    @patch('cryton.lib.util.run_executions_in_threads', MagicMock)
+    @patch('django.db.connections.close_all', MagicMock)
+    @patch('cryton.lib.util.rm_path', MagicMock)
+    def test_execute_with_unfinished_dependency(self):
+
+        with patch.object(stage.StageExecution, 'state') as mock_state:
+            mock_state.__get__ = Mock(side_effect=['PENDING', 'RUNNING', 'FINISHED'])
+            with patch.object(stage.StageExecution, 'all_dependencies_finished') as mock_dependencies:
+                mock_dependencies.__get__ = Mock(side_effect=[False])
+                self.stage_ex_obj.execute()
+                self.assertEqual('WAITING', self.stage_ex_obj.state)
 
     #TODO
     @patch('multiprocessing.Process', MagicMock)
@@ -397,10 +419,10 @@ class TestStageExecute(TestCase):
 
         self.assertIn("stagexecution executed", cm.output[0])
 
-    @patch('cryton.lib.triggers.trigger_delta.TriggerDelta._TriggerDelta__create_start_time')
+    @patch('cryton.lib.triggers.trigger_delta.TriggerDelta._TriggerDelta__create_schedule_time')
     @patch('cryton.lib.triggers.trigger_delta.scheduler_client.schedule_function')
-    def test_schedule(self, schedule_function, start_time):  # this just works
-        start_time.return_value = datetime.datetime.now()
+    def test_schedule(self, schedule_function, schedule_time):
+        schedule_time.return_value = datetime.datetime.now()
         schedule_function.return_value = '1'
         with self.assertLogs('cryton-debug', level='INFO') as cm:
             trigger_delta.TriggerDelta(stage_execution_id=self.stage_ex_obj.model.id).schedule()
@@ -459,4 +481,3 @@ class TestStageExecute(TestCase):
         stage_execution_model = baker.make(StageExecutionModel, **{'state': 'RUNNING'})
         stage_execution = stage.StageExecution(stage_execution_id=stage_execution_model.id)
         stage_execution.validate_modules()
-

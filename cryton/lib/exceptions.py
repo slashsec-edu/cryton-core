@@ -269,6 +269,14 @@ class ParameterMissingError(Error):
         super().__init__(self.message)
 
 
+class DependencyDoesNotExist(Error):
+    """Exception raised if could not create dependency between Stages."""
+    def __init__(self, message: Union[Exception, str], stage_name: str = None):
+        self.message = {"message": message, "stage_name": stage_name}
+        logger.logger.error("stage dependency does not exist", stage_name=stage_name, status='fail')
+        super().__init__(self.message)
+
+
 class InvalidSuccessorType(Error):
     """Exception raised if trying to set invalid type of successor."""
 

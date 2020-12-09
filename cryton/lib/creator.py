@@ -55,10 +55,27 @@ def create_plan(plan_file_dict: dict) -> plan.Plan:
     # Store Stages and Steps
     for stage_dict in stages_list:
         try:
-            create_stage(stage_dict, plan_obj.model.id)
+            stage_obj = create_stage(stage_dict, plan_obj.model.id)
+            stage_dict.update({'stage_model_id': stage_obj.model.id})
         except exceptions.CreationFailedError as ex:
             plan_obj.delete()
             raise exceptions.PlanCreationFailedError(message=ex, plan_name=plan_dict.get('name'))
+
+    for stage_dict in stages_list:
+        stage_id = stage_dict.get('stage_model_id')
+        stage_dependencies = stage_dict.get('depends_on', [])
+        stage_obj = stage.Stage(stage_model_id=stage_id)
+
+        # set dependencies
+        for stage_dependency_name in stage_dependencies:
+            try:
+                stage_dependency_id = stage.StageModel.objects.get(name=stage_dependency_name,
+                                                                   plan_model_id=plan_obj.model.id).id
+            except stage.StageModel.DoesNotExist as ex:
+                plan_obj.delete()
+                raise exceptions.DependencyDoesNotExist(message=ex, stage_name=stage_dependency_name)
+
+            stage_obj.add_dependency(stage_dependency_id)
 
     logger.logger.info("plan created", plan_name=plan_obj.name,
                        plan_id=plan_obj.model.id, status='success')

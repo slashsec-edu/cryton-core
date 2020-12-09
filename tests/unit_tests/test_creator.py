@@ -154,6 +154,18 @@ class TestCreator(TestCase):
         with self.assertRaises(exceptions.PlanValidationError):
             creator.create_plan(plan_dict)
 
+        mock_validation = patch('cryton.lib.creator.validate_plan_dict')
+        mock_validation.start()
+        with self.assertRaises(exceptions.PlanCreationFailedError):
+            creator.create_plan(plan_dict)
+        mock_validation.stop()
+
+        with open('{}/plan.yaml'.format(TESTS_DIR)) as fp:
+            plan_dict = yaml.safe_load(fp)
+        plan_dict.get('plan').get('stages')[0].update({'depends_on': ['arg']})
+        with self.assertRaises(exceptions.DependencyDoesNotExist):
+            creator.create_plan(plan_dict)
+
     def test_create_run(self):
         creator.create_run(self.plan_model_obj.id, [self.worker_1, self.worker_2])
 

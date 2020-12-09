@@ -44,9 +44,7 @@ class PlanModel(InstanceModel):
 
 
 class StageModel(InstanceModel):
-    plan_model = models.ForeignKey(PlanModel,
-                                   on_delete=models.CASCADE,
-                                   related_name='stages')
+    plan_model = models.ForeignKey(PlanModel, on_delete=models.CASCADE, related_name='stages')
     executor = models.TextField(null=True, blank=True)
     trigger_type = models.TextField()
     trigger_args = JSONField()
@@ -57,9 +55,7 @@ class StageModel(InstanceModel):
 
 
 class StepModel(InstanceModel):
-    stage_model = models.ForeignKey(StageModel,
-                                    on_delete=models.CASCADE,
-                                    related_name='steps')
+    stage_model = models.ForeignKey(StageModel, on_delete=models.CASCADE, related_name='steps')
     attack_module = models.TextField()
     attack_module_args = JSONField()
     is_init = models.BooleanField(default=False)
@@ -103,8 +99,7 @@ class ExecutionModel(TimeStampedModel):
 
 class PlanExecutionModel(ExecutionModel):
     run = models.ForeignKey(RunModel, on_delete=models.CASCADE, related_name='plan_executions')
-    plan_model = models.ForeignKey(PlanModel, on_delete=models.CASCADE,
-                                   related_name='plan_executions')
+    plan_model = models.ForeignKey(PlanModel, on_delete=models.CASCADE, related_name='plan_executions')
     worker = models.ForeignKey(WorkerModel, related_name='plan_executions', on_delete=models.PROTECT)
     aps_job_id = models.TextField(default=None, null=True)
     evidence_dir = models.TextField(blank=True, null=True)
@@ -115,11 +110,10 @@ class PlanExecutionModel(ExecutionModel):
 
 
 class StageExecutionModel(ExecutionModel):
-    plan_execution = models.ForeignKey(PlanExecutionModel, on_delete=models.CASCADE,
-                                       related_name='stage_executions')
-    stage_model = models.ForeignKey(StageModel, on_delete=models.CASCADE,
-                                    related_name='stage_executions')
+    plan_execution = models.ForeignKey(PlanExecutionModel, on_delete=models.CASCADE, related_name='stage_executions')
+    stage_model = models.ForeignKey(StageModel, on_delete=models.CASCADE, related_name='stage_executions')
     aps_job_id = models.TextField(default=None, null=True)
+    schedule_time = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = 'stage_execution'
@@ -127,8 +121,7 @@ class StageExecutionModel(ExecutionModel):
 
 
 class StepExecutionModel(ExecutionModel):
-    stage_execution = models.ForeignKey(StageExecutionModel, on_delete=models.CASCADE,
-                                        related_name='step_executions')
+    stage_execution = models.ForeignKey(StageExecutionModel, on_delete=models.CASCADE, related_name='step_executions')
     step_model = models.ForeignKey(StepModel, on_delete=models.CASCADE, related_name='step_executions')
     result = models.TextField(default='NONE', blank=True, null=True)
     std_out = models.TextField(default='NONE', blank=True, null=True)
@@ -145,8 +138,7 @@ class StepExecutionModel(ExecutionModel):
 
 
 class SessionModel(models.Model):
-    plan_execution = models.ForeignKey(PlanExecutionModel, on_delete=models.CASCADE,
-                                       related_name='namedsessionmodel')
+    plan_execution = models.ForeignKey(PlanExecutionModel, on_delete=models.CASCADE, related_name='namedsessionmodel')
     session_name = models.TextField(null=True, blank=True, default=None)
     session_id = models.TextField(default='0')
 
@@ -191,3 +183,8 @@ class OutputMapping(models.Model):
     step_model = models.ForeignKey(StepModel, on_delete=models.CASCADE, related_name='output_mappings')
     name_from = models.TextField()
     name_to = models.TextField()
+
+
+class DependencyModel(models.Model):
+    stage_model = models.ForeignKey(StageModel, related_name='dependencies', on_delete=models.CASCADE)
+    dependency = models.ForeignKey(StageModel, related_name='subjects_to', on_delete=models.CASCADE)
