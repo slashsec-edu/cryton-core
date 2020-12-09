@@ -1,7 +1,8 @@
 from typing import Union, Type, Optional
 from datetime import datetime
 from multiprocessing import Process
-from schema import Schema, SchemaError, Or
+from schema import Schema, SchemaError, Or, Optional as SchemaOptional
+import copy
 
 from django.db.models.query import QuerySet
 from django.core import exceptions as django_exc
@@ -10,7 +11,8 @@ from django.db import transaction, connections
 from cryton.cryton_rest_api.models import (
     StageModel,
     StageExecutionModel,
-    StepExecutionModel
+    StepExecutionModel,
+    DependencyModel
 )
 from cryton.lib import (
     exceptions,
@@ -52,7 +54,9 @@ class Stage:
                 )
 
         else:
-            self.model = StageModel.objects.create(**kwargs)
+            stage_obj_arguments = copy.deepcopy(kwargs)
+            stage_obj_arguments.pop('depends_on', None)
+            self.model = StageModel.objects.create(**stage_obj_arguments)
 
     def delete(self):
         self.model.delete()
@@ -169,7 +173,9 @@ class Stage:
             'name': str,
             'trigger_type': Or(*[trigger.name for trigger in list(triggers.TriggerType)]),
             'trigger_args': dict,
-            'steps': list
+            'steps': list,
+            SchemaOptional('depends_on'): list
+
         })
 
         try:
@@ -224,6 +230,17 @@ class Stage:
                 f"One or more successors are set as init steps. Invalid steps are {invalid_steps}.")
 
         return True
+
+    def add_dependency(self, dependency_id: int) -> int:
+        """
+        Create dependency object
+        :param dependency_id: Stage ID
+        :return: ID of the dependency object
+        """
+        dependency_obj = DependencyModel(stage_model_id=self.model.id, dependency_id=dependency_id)
+        dependency_obj.save()
+
+        return dependency_obj.id
 
 
 class StageExecution:
@@ -292,6 +309,16 @@ class StageExecution:
         model.save()
 
     @property
+    def schedule_time(self) -> Optional[datetime]:
+        return self.model.schedule_time
+
+    @schedule_time.setter
+    def schedule_time(self, value: Optional[datetime]):
+        model = self.model
+        model.schedule_time = value
+        model.save()
+
+    @property
     def pause_time(self) -> Optional[datetime]:
         return self.model.pause_time
 
@@ -319,6 +346,14 @@ class StageExecution:
 
         return not cond
 
+    @property
+    def all_dependencies_finished(self) -> bool:
+        dependency_ids = self.model.stage_model.dependencies.all().values_list('dependency_id', flat=True)
+        cond = self.filter(stage_model_id__in=dependency_ids, plan_execution_id=self.model.plan_execution_id)\
+            .exclude(state=st.FINISHED).exists()
+
+        return not cond
+
     @staticmethod
     def filter(**kwargs) -> QuerySet:
         """
@@ -340,6 +375,12 @@ class StageExecution:
         :return: None
         """
         st.StageStateMachine(self.model.id).validate_state(self.state, st.STAGE_EXECUTE_STATES)
+
+        # Stop the execution if dependencies aren't finished
+        if not self.all_dependencies_finished:
+            if self.state != st.WAITING:
+                self.state = st.WAITING
+            return None
 
         # Get initial Steps in Stage
         init_steps = self.model.stage_model.steps.filter(is_init=True)
@@ -405,8 +446,8 @@ class StageExecution:
     def report(self) -> dict:
         report_dict = dict()
         report_dict.update({'id': self.model.id, 'stage_name': self.model.stage_model.name, 'state': self.state,
-                            'start_time': self.start_time, 'finish_time': self.finish_time,
-                            'pause_time': self.pause_time})
+                            'schedule_time': self.schedule_time, 'start_time': self.start_time,
+                            'finish_time': self.finish_time, 'pause_time': self.pause_time})
         report_dict.update({'step_executions': []})
         for step_execution_obj in StepExecutionModel.objects.filter(stage_execution_id=self.model.id).order_by('id'):
             step_ex_report = StepExecution(step_execution_id=step_execution_obj.id).report()

@@ -26,8 +26,11 @@ class TestProcess(TestCase):
     def setUp(self) -> None:
         self.worker_obj = creator.create_worker(name='test', address='test')
 
+    @patch('cryton.lib.event.process_list_sessions')
+    @patch('cryton.lib.event.process_list_modules')
+    @patch('cryton.lib.event.process_kill_execution')
     @patch('cryton.lib.event.process_validate_module')
-    def test_process_control_event(self, mock_validate):
+    def test_process_control_event(self, mock_validate, mock_kill, mock_list_mod, mock_list_sess):
         corr_obj = CorrelationEvent(correlation_id=1, event_identification_value=self.worker_obj.model.id)
         self.assertEqual(self.worker_obj.state, states.DOWN)
         event.process_control_event(control_event_t='HEALTHCHECK', control_event_v={'return_code': 0},
@@ -37,6 +40,15 @@ class TestProcess(TestCase):
         event.process_control_event(control_event_t='VALIDATE_MODULE', control_event_v={'return_code': 0},
                                     correlation_event_obj=corr_obj)
         self.assertEqual(1, mock_validate.call_count)
+
+        event.process_control_event('LIST_SESSIONS', {}, corr_obj)
+        mock_list_sess.assert_called_once()
+
+        event.process_control_event('LIST_MODULES', {}, corr_obj)
+        mock_list_mod.assert_called_once()
+
+        event.process_control_event('KILL_EXECUTION', {}, corr_obj)
+        mock_kill.assert_called_once()
 
         with self.assertLogs('cryton-debug', level='WARN'):
             event.process_control_event(control_event_t='NONEXISTENT', control_event_v={'return_code': 0},
@@ -82,3 +94,12 @@ class TestProcess(TestCase):
 
         self.assertIsNone(event.process_validate_module({'return_code': -1}, step_ex_obj.model.id))
         self.assertFalse(step_ex_obj.valid)
+
+    def test_process_list_sessions(self):
+        self.assertIsNone(event.process_list_sessions({}))
+
+    def test_process_list_modules(self):
+        self.assertIsNone(event.process_list_modules({}))
+
+    def test_process_kill_execution(self):
+        self.assertIsNone(event.process_kill_execution({}, 1))

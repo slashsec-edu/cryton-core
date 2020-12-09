@@ -14,7 +14,11 @@ from cryton.lib import (
     util,
     logger,
     states,
+    constants,
     event
+)
+from cryton.lib.triggers import (
+    triggers
 )
 from cryton.etc import config
 
@@ -180,6 +184,10 @@ def handle_finished(step_exec_obj: step.StepExecution) -> None:
         logger.logger.info("stagexecution finished", stage_execution_id=stage_exec_obj.model.id)
         stage_exec_obj.state = states.FINISHED
         stage_exec_obj.finish_time = datetime.utcnow()
+        if stage_exec_obj.model.stage_model.trigger_type == constants.DELTA:
+            triggers.TriggerType[constants.DELTA].value(stage_execution_id=stage_exec_obj.model.id)\
+                .execute_subjects_to_dependency()
+
         plan_exec_obj = plan.PlanExecution(plan_execution_id=stage_exec_obj.model.plan_execution_id)
         if plan_exec_obj.all_stages_finished:
             logger.logger.info("planexecution finished",
