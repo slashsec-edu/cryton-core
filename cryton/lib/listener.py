@@ -226,7 +226,7 @@ def handle_paused(step_exec_obj: step.StepExecution) -> None:
     return None
 
 
-def get_correlation_event(correlation_id: str) -> None:
+def get_correlation_event(correlation_id: str) -> None or CorrelationEvent:
     """
     Get CorrelationEvent with timeout.
     :param correlation_id: Correlation ID

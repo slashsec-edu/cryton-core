@@ -6,7 +6,7 @@ from django.test import TestCase
 from mock import patch, Mock, MagicMock
 from model_bakery import baker
 
-from cryton.lib import exceptions, plan, logger
+from cryton.lib import exceptions, plan, logger, stage
 
 from cryton.cryton_rest_api.models import (
     PlanModel,
@@ -370,9 +370,9 @@ class PlanExecutionTest(TestCase):
         plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
 
         with self.assertLogs('cryton-debug', level='INFO') as cm:
-            plan_execution.reschedule(datetime(2020, 12, 12, 11, 1, 1))
+            plan_execution.reschedule(datetime(3000, 12, 12, 11, 1, 1))
 
-        mock_schedule_plan.assert_called_with(datetime(2020, 12, 12, 11, 1, 1))
+        mock_schedule_plan.assert_called_with(datetime(3000, 12, 12, 11, 1, 1))
         mock_unschedule_plan.assert_called_once()
         self.assertIn("planexecution rescheduled", cm.output[0])
 
@@ -665,3 +665,23 @@ class PlanExecutionTest(TestCase):
         plan_execution_model = baker.make(PlanExecutionModel, **{'state': 'RUNNING'})
         plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
         plan_execution.validate_modules()
+
+    @patch('cryton.lib.plan.connections.close_all', Mock())
+    @patch('cryton.lib.stage.StageExecution.kill', Mock())
+    def test_kill(self):
+        plan_execution_model = baker.make(PlanExecutionModel, **{'state': 'RUNNING'})
+        baker.make(StageExecutionModel, **{'state': 'RUNNING', 'plan_execution': plan_execution_model})
+        plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
+
+        with self.assertLogs('cryton-debug', level='INFO'):
+            plan_execution.kill()
+        self.assertEqual(plan_execution.state, 'TERMINATED')
+
+    @patch('cryton.lib.plan.PlanExecution.unschedule', Mock())
+    def test_kill_scheduled(self):
+        plan_execution_model = baker.make(PlanExecutionModel, **{'state': 'SCHEDULED'})
+        plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
+
+        with self.assertLogs('cryton-debug', level='INFO'):
+            plan_execution.kill()
+        self.assertEqual(plan_execution.state, 'TERMINATED')

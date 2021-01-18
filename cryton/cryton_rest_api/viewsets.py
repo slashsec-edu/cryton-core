@@ -872,6 +872,24 @@ class RunViewSet(GeneralViewSet):
         msg = {'detail': '{}'.format("Run {} is unscheduled.".format(run_model_id))}
         return Response(msg, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(operation_description="Kill Run",
+                         request_body=serializers.serializers.Serializer(),
+                         responses={201: response_detail, 500: response_detail, 400: response_detail})
+    @action(methods=["post"], detail=True)
+    def kill(self, _, **kwargs):
+        run_model_id = kwargs.get("pk")
+        run_obj = run.Run(run_model_id=run_model_id)
+
+        try:
+            run_obj.kill()
+        except (core_exceptions.StateTransitionError, core_exceptions.InvalidStateError) as ex:
+            raise exceptions.ApiWrongObjectState(str(ex))
+        except Exception as ex:
+            raise exceptions.ApiInternalError(str(ex))
+
+        msg = {'detail': '{}'.format("Run {} is terminated.".format(run_model_id))}
+        return Response(msg, status=status.HTTP_200_OK)
+
 
 class ExecutionViewSet(GeneralViewSet):
     pass
@@ -931,6 +949,21 @@ class PlanExecutionViewSet(ExecutionViewSet):
         msg = {'detail': '{}'.format("Plan modules are being validated.")}
         return Response(msg, status=status.HTTP_200_OK)
 
+    @action(methods=["post"], detail=True)
+    def kill(self, _, **kwargs):
+        plan_execution_id = kwargs.get('pk')
+        plan_ex_obj = plan.PlanExecution(plan_execution_id=plan_execution_id)
+
+        try:
+            plan_ex_obj.kill()
+        except (core_exceptions.StateTransitionError, core_exceptions.InvalidStateError) as ex:
+            raise exceptions.ApiWrongObjectState(str(ex))
+        except Exception as ex:
+            raise exceptions.ApiInternalError(str(ex))
+
+        msg = {'detail': '{}'.format("Plan execution {} is terminated.".format(plan_execution_id))}
+        return Response(msg, status=status.HTTP_200_OK)
+
 
 class StageExecutionViewSet(ExecutionViewSet):
     """
@@ -941,10 +974,11 @@ class StageExecutionViewSet(ExecutionViewSet):
         Get StageExecution specified by ID
     """
     method_serializer_classes = {
-        ("GET",): serializers.StageExecutionModelSerializer
+        ("GET",): serializers.StageExecutionModelSerializer,
+        ("POST",): serializers.StageExecutionModelSerializer
     }
     queryset = StageExecutionModel.objects.all()
-    http_method_names = ["get"]
+    http_method_names = ["get", "post"]
 
     @filter_decorator
     def get_queryset(self):
@@ -960,6 +994,21 @@ class StageExecutionViewSet(ExecutionViewSet):
 
         return Response(report_dict, status=status.HTTP_200_OK)
 
+    @action(methods=["post"], detail=True)
+    def kill(self, _, **kwargs):
+        stage_execution_id = kwargs.get('pk')
+        stage_ex_obj = stage.StageExecution(stage_execution_id=stage_execution_id)
+
+        try:
+            stage_ex_obj.kill()
+        except (core_exceptions.StateTransitionError, core_exceptions.InvalidStateError) as ex:
+            raise exceptions.ApiWrongObjectState(str(ex))
+        except Exception as ex:
+            raise exceptions.ApiInternalError(str(ex))
+
+        msg = {'detail': '{}'.format("Stage execution {} is terminated.".format(stage_execution_id))}
+        return Response(msg, status=status.HTTP_200_OK)
+
 
 class StepExecutionViewset(ExecutionViewSet):
     """
@@ -970,10 +1019,11 @@ class StepExecutionViewset(ExecutionViewSet):
         Get StepExecution specified by ID
     """
     method_serializer_classes = {
-        ("GET",): serializers.StepExecutionModelSerializer
+        ("GET",): serializers.StepExecutionModelSerializer,
+        ("POST",): serializers.StepExecutionModelSerializer
     }
     queryset = StepExecutionModel.objects.all()
-    http_method_names = ["get"]
+    http_method_names = ["get", "post"]
 
     @filter_decorator
     def get_queryset(self):
@@ -999,6 +1049,21 @@ class StepExecutionViewset(ExecutionViewSet):
         report_dict = step_ex_obj.report()
 
         return Response(report_dict, status=status.HTTP_200_OK)
+
+    @action(methods=["post"], detail=True)
+    def kill(self, _, **kwargs):
+        step_execution_id = kwargs.get('pk')
+        step_ex_obj = step.StepExecution(step_execution_id=step_execution_id)
+
+        try:
+            step_ex_obj.kill()
+        except (core_exceptions.StateTransitionError, core_exceptions.InvalidStateError) as ex:
+            raise exceptions.ApiWrongObjectState(str(ex))
+        except Exception as ex:
+            raise exceptions.ApiInternalError(str(ex))
+
+        msg = {'detail': '{}'.format("Step execution {} is terminated.".format(step_execution_id))}
+        return Response(msg, status=status.HTTP_200_OK)
 
 
 class WorkerViewset(GeneralViewSet):

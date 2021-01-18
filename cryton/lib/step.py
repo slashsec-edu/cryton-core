@@ -17,7 +17,8 @@ from cryton.cryton_rest_api.models import (
     StepExecutionModel,
     SuccessorModel,
     ExecutionVariableModel,
-    OutputMapping
+    OutputMapping,
+    CorrelationEvent
 )
 from cryton.lib import (
     exceptions,
@@ -25,7 +26,8 @@ from cryton.lib import (
     session,
     states,
     constants,
-    logger
+    logger,
+    worker
 )
 
 
@@ -804,3 +806,32 @@ class StepExecution:
             logger.logger.info('successors stepexecution paused', succ_exec_id=succ_exec_id)
 
         return None
+
+    def kill(self) -> dict:
+        """
+        Kill current Step Execution on Worker
+        :return: Dictionary containing return_code and std_err
+        """
+        states.StepStateMachine(self.model.id).validate_state(self.state, states.STEP_KILL_STATES)
+        worker_obj = worker.Worker(worker_model_id=self.model.stage_execution.plan_execution.worker.id)
+        worker_rpc = worker.WorkerRpc()
+        correlation_obj = CorrelationEvent.objects.filter(event_identification_value=self.model.id).first()
+
+        args = {'correlation_id': correlation_obj.correlation_id}
+        try:
+            resp = worker_rpc.call(worker_obj.control_q_name, 'KILL_EXECUTION', args)
+        except Exception as ex:
+            raise ex
+        finally:
+            worker_rpc.close()
+        resp_dict = json.loads(resp)
+        resp_dict = resp_dict.get('event_v')
+
+        if resp_dict.get('return_code') == 0:
+            logger.logger.info("stepexecution killed", step_execution_id=self.model.id,
+                               stage_name=self.model.step_model.name, status='success')
+        else:
+            logger.logger.info("stepexecution not killed", step_execution_id=self.model.id,
+                               stage_name=self.model.step_model.name, status='failure', error=resp_dict.get('std_err'))
+
+        return resp_dict

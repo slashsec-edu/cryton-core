@@ -445,9 +445,34 @@ class TestStageExecute(TestCase):
         self.assertIn("stagexecution unscheduled", cm.output[0])
         self.assertEqual(self.stage_ex_obj.aps_job_id, None)
 
+    @patch('cryton.lib.step.StepExecution.kill', Mock())
     def test_kill(self):
-        with self.assertLogs('cryton-debug', level='INFO') as cm:
-            self.stage_ex_obj.kill()
+        stage_ex_model = baker.make(StageExecutionModel, **{'state': 'RUNNING'})
+        baker.make(StepExecutionModel, **{'state': 'RUNNING', 'stage_execution': stage_ex_model})
+        stage_ex = stage.StageExecution(stage_execution_id=stage_ex_model.id)
+
+        with self.assertLogs('cryton-debug', level='INFO'):
+            stage_ex.kill()
+        self.assertEqual(stage_ex.state, 'TERMINATED')
+
+    @patch('cryton.lib.triggers.trigger_delta.TriggerDelta.unschedule', Mock())
+    def test_kill_scheduled(self):
+        stage_ex_model = baker.make(
+            StageExecutionModel, **{'state': 'PENDING', 'schedule_time': datetime.datetime.now(), 'stage_model':
+                baker.make(StageModel, **{'trigger_type': 'delta', 'trigger_args': {}})})
+        stage_ex = stage.StageExecution(stage_execution_id=stage_ex_model.id)
+
+        with self.assertLogs('cryton-debug', level='INFO'):
+            stage_ex.kill()
+        self.assertEqual(stage_ex.state, 'TERMINATED')
+
+    def test_kill_waiting(self):
+        stage_ex_model = baker.make(StageExecutionModel, **{'state': 'WAITING'})
+        stage_ex = stage.StageExecution(stage_execution_id=stage_ex_model.id)
+
+        with self.assertLogs('cryton-debug', level='INFO'):
+            stage_ex.kill()
+        self.assertEqual(stage_ex.state, 'TERMINATED')
 
     # @patch('cryton.lib.step.StepExecution.validate_attack_module_args')
     # def test_validate_modules(self, validate_args):

@@ -1,5 +1,6 @@
 from typing import List, Optional, Union, Type
 from datetime import datetime, timedelta
+from threading import Thread
 
 from django.db.models.query import QuerySet
 from django.core import exceptions as django_exc
@@ -20,9 +21,6 @@ from cryton.lib import (
     states as st,
     logger
 )
-
-
-
 
 
 class Run:
@@ -375,6 +373,30 @@ class Run:
             self.start_time = datetime.utcnow()
 
         logger.logger.info("run executed", run_id=self.model.id, status='success')
+
+        return None
+
+    def kill(self) -> None:
+        """
+        Kill current Run and its PlanExecutions
+        :return: None
+        """
+        st.RunStateMachine(self.model.id).validate_state(self.state, st.RUN_KILL_STATES)
+        threads = list()
+
+        for plan_ex_obj in self.model.plan_executions.filter(state__in=st.PLAN_KILL_STATES):
+            plan_ex = plan.PlanExecution(plan_execution_id=plan_ex_obj.id)
+            thread = Thread(target=plan_ex.kill)
+            threads.append(thread)
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        self.state = st.TERMINATED
+        logger.logger.info("run killed", run_id=self.model.id, status='success')
 
         return None
 
