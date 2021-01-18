@@ -97,12 +97,7 @@ class Step:
 
     @property
     def attack_module(self) -> str:
-        """
-        Replaces '/' with '.' in attack_module string
-        :return:
-        """
-        attack_module_fix = self.model.attack_module.replace('/', '.')
-        return attack_module_fix
+        return self.model.attack_module
 
     @attack_module.setter
     def attack_module(self, value: str):
