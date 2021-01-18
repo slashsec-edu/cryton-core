@@ -185,3 +185,13 @@ class RunTestAdvanced(TestCase):
         self.assertIn("run scheduled", cm.output[1])
         self.assertIn("run postponed", cm.output[2])
         self.assertEqual(run_obj.start_time, start_time_dt + dt)
+
+    @patch('cryton.lib.plan.PlanExecution.kill', Mock())
+    def test_kill(self):
+        run_obj = run.Run(plan_model_id=self.plan_model.id, workers_list=self.workers_list)
+        for plan_ex_model in run_obj.model.plan_executions.all():
+            plan.PlanExecution(plan_execution_id=plan_ex_model.id).state = states.RUNNING
+        run_obj.state = states.RUNNING
+        with self.assertLogs('cryton-debug', level='INFO'):
+            run_obj.kill()
+        self.assertEqual(run_obj.state, states.TERMINATED)

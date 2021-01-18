@@ -3,6 +3,7 @@ from datetime import datetime
 from multiprocessing import Process
 from schema import Schema, SchemaError, Or, Optional as SchemaOptional
 import copy
+from threading import Thread
 
 from django.db.models.query import QuerySet
 from django.core import exceptions as django_exc
@@ -17,6 +18,7 @@ from cryton.cryton_rest_api.models import (
 from cryton.lib import (
     exceptions,
     states as st,
+    constants as co,
     logger,
     util
 )
@@ -418,21 +420,6 @@ class StageExecution:
 
         return None
 
-    def kill(self) -> None:
-        """
-        Kill StageExecution and its StepExecutions
-        :raises:
-            Error
-        :return: None
-        """
-        # for step_obj in StepExecution.filter(stage_execution_id=self.model.id, state='RUNNING'):
-        #     StepExecution(step_execution_id=step_obj.id).kill()  # kill running steps on executor
-        # self.state = 'KILLED'
-
-        logger.logger.info("stagexecution killed", stage_execution_id=self.model.id,
-                           stage_name=self.model.stage_model.name, status='success')
-        pass
-
     def validate_modules(self) -> None:
         """
         Check if module is present and module args are correct for each Step
@@ -454,6 +441,39 @@ class StageExecution:
             report_dict['step_executions'].append(step_ex_report)
 
         return report_dict
+
+    def kill(self) -> None:
+        """
+        Kill current StageExecution and its StepExecutions
+        :return: None
+        """
+        st.StageStateMachine(self.model.id).validate_state(self.state, st.STAGE_KILL_STATES)
+
+        if self.state == st.WAITING:
+            pass
+
+        elif self.schedule_time is not None and self.state == st.PENDING and \
+                self.model.stage_model.trigger_type == co.DELTA:
+            triggers.TriggerType[co.DELTA].value(stage_execution_id=self.model.id).unschedule()
+
+        else:
+            threads = list()
+            for step_ex_obj in self.model.step_executions.filter(state__in=st.STEP_KILL_STATES):
+                step_ex = StepExecution(step_execution_id=step_ex_obj.id)
+                thread = Thread(target=step_ex.kill)
+                threads.append(thread)
+
+            for thread in threads:
+                thread.start()
+
+            for thread in threads:
+                thread.join()
+
+        self.state = st.TERMINATED
+        logger.logger.info("stagexecution killed", stage_execution_id=self.model.id,
+                           stage_name=self.model.stage_model.name, status='success')
+
+        return None
 
 
 def execution(execution_id: int) -> None:

@@ -3,10 +3,11 @@ from datetime import datetime
 from typing import Union, Type, Optional
 
 from django.core import exceptions as django_exc
-from django.db import transaction
+from django.db import transaction, connections
 from django.db.models.query import QuerySet
 import yaml
 from schema import Schema, Optional as SchemaOptional, SchemaError, And
+from multiprocessing import Process
 
 from cryton.cryton_rest_api.models import (
     PlanModel,
@@ -494,6 +495,36 @@ class PlanExecution:
             report_dict['stage_executions'].append(stage_ex_report)
 
         return report_dict
+
+    def kill(self) -> None:
+        """
+        Kill current PlanExecution and its StageExecutions
+        :return: None
+        """
+        st.PlanStateMachine(self.model.id).validate_state(self.state, st.PLAN_KILL_STATES)
+
+        if self.state in st.PLAN_UNSCHEDULE_STATES:
+            self.unschedule()
+
+        else:
+            processes = list()
+            for stage_ex_obj in self.model.stage_executions.filter(state__in=st.STAGE_KILL_STATES):
+                stage_ex = StageExecution(stage_execution_id=stage_ex_obj.id)
+                process = Process(target=stage_ex.kill)
+                processes.append(process)
+
+            connections.close_all()  # close connections to force each process to create its own
+            for process in processes:
+                process.start()
+
+            for process in processes:
+                process.join()
+
+        self.state = st.TERMINATED
+        logger.logger.info("planexecution killed", plan_execution_id=self.model.id,
+                           plan_name=self.model.plan_model.name, status='success')
+
+        return None
 
 
 def execution(plan_execution_id: int) -> None:

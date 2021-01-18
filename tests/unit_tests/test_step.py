@@ -1,5 +1,5 @@
 from django.test import TestCase
-from mock import patch, MagicMock
+from mock import patch, MagicMock, Mock
 from cryton.lib import (
     step,
     exceptions,
@@ -870,3 +870,16 @@ class TestStepExecute(TestCase):
             worker_model=self.stage_execution.plan_execution.worker,
             event_identification_value=step_exec.model.id,
             executor=step_obj.model.executor)
+
+    @patch('json.loads')
+    @patch('cryton.lib.worker.WorkerRpc', Mock())
+    def test_kill(self, mock_loads):
+        mock_loads.return_value = {"event_v": {"return_code": 0}}
+
+        step_ex_model = baker.make(StepExecutionModel, **{'state': 'RUNNING'})
+        step_ex = step.StepExecution(step_execution_id=step_ex_model.id)
+        baker.make(CorrelationEvent, event_identification_value=step_ex_model.id)
+
+        with self.assertLogs('cryton-debug', level='INFO'):
+            ret = step_ex.kill()
+        self.assertEqual(ret, {'return_code': 0})
