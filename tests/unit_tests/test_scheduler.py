@@ -44,10 +44,10 @@ class SchedulerTest(TestCase):
         service = scheduler.SchedulerService(mock_scheduler)
         fnc = Mock
 
-        ret = service.exposed_add_job(fnc, [], datetime.datetime(2020, 3, 14, 15, 0))
+        ret = service.exposed_add_job(fnc, [], datetime.datetime(3000, 3, 14, 15, 0))
         self.assertEqual(ret, '42')
         mock_scheduler.add_job.assert_called_with(fnc, 'date', misfire_grace_time=config_mock,
-                                                  run_date='2020-03-14 15:00:00', args=[])
+                                                  run_date='3000-03-14 15:00:00', args=[])
 
     def test_exposed_reschedule_job(self):
         mock_scheduler = Mock()
