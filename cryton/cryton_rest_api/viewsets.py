@@ -63,8 +63,15 @@ def filter_decorator(func):
         # Obtain queryset
         queryset = func(self)
 
-        # Update filters with __icontains
-        filters_dict_update = {key + '__icontains': value for key, value in filters_dict.items()}
+        # Update filters (optionally with __icontains)
+        unsearchable_keys = ['stage_model_id', 'plan_model_id', 'run_id', 'plan_execution_id',
+                             'stage_execution_id']
+        filters_dict_update = dict()
+        for key, value in filters_dict.items():
+            if key not in unsearchable_keys:
+                filters_dict_update.update({key + '__icontains': value})
+            else:
+                filters_dict_update.update({key: value})
 
         # Filter and order
         queryset = queryset.filter(**filters_dict_update)
