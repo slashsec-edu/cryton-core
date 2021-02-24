@@ -13,9 +13,20 @@ steps:
   next:
   - type: result
     value: OK
-    step: ssh-bruteforce
+    step:
+    - ssh-bruteforce
+    - ssh-login
 - name: ssh-bruteforce
   attack_module: infrastructure/exploits/mod_msf
   attack_module_args:
       exploit: auxiliary/scanner/ssh/ssh_login
       USERPASS_FILE: /usr/share/metasploit-framework/data/wordlists/root_userpass.txt
+  next:
+    - type: result
+      value: OK
+      step: ssh-login
+- name: ssh-login
+  attack_module: infrastructure/misc/mod_ssh
+  attack_module_args:
+      username: john
+      password: john123

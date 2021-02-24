@@ -101,7 +101,34 @@ class TestCreator(TestCase):
         self.assertFalse(step_obj.is_final)
 
         step_obj = step.StepModel.objects.get(name='ssh-bruteforce')
+        self.assertFalse(step_obj.is_final)
+
+        step_obj = step.StepModel.objects.get(name='ssh-login')
         self.assertTrue(step_obj.is_final)
+
+    def test_create_stage_successors(self):
+        with open('{}/stage.yaml'.format(TESTS_DIR)) as fp, self.assertLogs('cryton-debug', level='INFO') as cm:
+            stage_dict = yaml.safe_load(fp)
+            stage_obj = creator.create_stage(stage_dict, plan_model_id=self.plan_model_obj.id)
+        self.assertTrue(stage.Stage.filter(id=stage_obj.model.id).exists())
+        self.assertIn('"status": "success"', cm.output[0])
+
+        step_model = step.StepModel.objects.get(name='scan-localhost')
+        step_obj = step.Step(step_model_id=step_model.id)
+        successors = step_obj.successors
+        self.assertEqual(len(successors), 2)
+        self.assertEqual({step_obj.name for step_obj in successors}, {"ssh-bruteforce", "ssh-login"})
+
+        step_model = step.StepModel.objects.get(name='ssh-bruteforce')
+        step_obj = step.Step(step_model_id=step_model.id)
+        successors = step_obj.successors
+        self.assertEqual(len(successors), 1)
+        self.assertEqual(successors[0].name, "ssh-login")
+
+        step_model = step.StepModel.objects.get(name='ssh-login')
+        step_obj = step.Step(step_model_id=step_model.id)
+        successors = step_obj.successors
+        self.assertEqual(len(successors), 0)
 
     def test_create_stage_wrong(self):
         with open('{}/stage.yaml'.format(TESTS_DIR)) as fp, self.assertLogs('cryton-debug', level='INFO') as cm, \

@@ -51,7 +51,6 @@ def create_plan(plan_file_dict: dict) -> plan.Plan:
         plan_obj = plan.Plan(**plan_dict)
     except TypeError as ex:
         raise exceptions.PlanCreationFailedError(message=ex, plan_name=plan_dict.get('name'))
-
     # Store Stages and Steps
     for stage_dict in stages_list:
         try:
@@ -120,21 +119,23 @@ def create_stage(stage_dict: dict, plan_model_id: int) -> stage.Stage:
 
         # set successors
         for step_successor in step_successor_list:
-
-            succ_name, succ_type, succ_value = (step_successor.get(key) for key in ['step', 'type', 'value'])
-            try:
-                step_succ_id = step.StepModel.objects.get(name=succ_name,
-                                                          stage_model_id=stage_obj.model.id).id
-            except step.StepModel.DoesNotExist as ex:
-                raise exceptions.StageCreationFailedError(message=ex, stage_name=stage_dict_cp.get('name'))
-            try:
-                if type(succ_value) == list:
-                    for succ_value_unit in succ_value:
-                        step_obj.add_successor(step_succ_id, succ_type, succ_value_unit)
-                else:
-                    step_obj.add_successor(step_succ_id, succ_type, succ_value)
-            except exceptions.InvalidSuccessorType as ex:
-                raise exceptions.StageCreationFailedError(message=ex, stage_name=stage_dict_cp.get('name'))
+            succ_list, succ_type, succ_value = (step_successor.get(key) for key in ['step', 'type', 'value'])
+            if not isinstance(succ_list, list):
+                succ_list = [succ_list]
+            for succ in succ_list:
+                try:
+                    step_succ_id = step.StepModel.objects.get(name=succ,
+                                                              stage_model_id=stage_obj.model.id).id
+                except step.StepModel.DoesNotExist as ex:
+                    raise exceptions.StageCreationFailedError(message=ex, stage_name=stage_dict_cp.get('name'))
+                try:
+                    if type(succ_value) == list:
+                        for succ_value_unit in succ_value:
+                            step_obj.add_successor(step_succ_id, succ_type, succ_value_unit)
+                    else:
+                        step_obj.add_successor(step_succ_id, succ_type, succ_value)
+                except exceptions.InvalidSuccessorType as ex:
+                    raise exceptions.StageCreationFailedError(message=ex, stage_name=stage_dict_cp.get('name'))
 
     logger.logger.info("stage created", stage_name=stage_obj.name,
                        stage_id=stage_obj.model.id, status='success')
