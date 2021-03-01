@@ -206,7 +206,10 @@ class Stage:
                 init_steps.add(step_dict.get('name'))
             succ_set = set()
             for succ_obj in step_dict.get('next', []):
-                succ_set.add(succ_obj.get('step'))
+                step_successors = succ_obj.get('step')
+                if not isinstance(step_successors, list):
+                    step_successors = [step_successors]
+                succ_set.update(step_successors)
                 steps_graph.update({step_dict.get('name'): succ_set})
             all_successors_set.update(succ_set)
             all_steps_set.add(step_dict.get('name'))
