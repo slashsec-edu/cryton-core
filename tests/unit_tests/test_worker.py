@@ -49,13 +49,14 @@ class TestWorker(TestCase):
                          .format(self.worker_obj.q_prefix))
 
     @patch('cryton.lib.worker.sleep', return_value=None)
-    @patch('cryton.lib.util.rabbit_send_msg')
+    @patch('cryton.lib.worker.WorkerRpc.call')
     def test_healthcheck(self, mock_rab, mock_sleep):
-        mock_rab.return_value = 42
+        mock_rab.return_value = {'event_v': {'return_code': 0}}
         self.assertTrue(self.worker_obj.healthcheck())
-        CorrelationEvent.objects.create(correlation_id=42)
+        mock_rab.return_value = {'event_v': {'return_code': -1}}
         self.assertFalse(self.worker_obj.healthcheck())
-        self.assertEqual(5, mock_sleep.call_count)
+        mock_rab.return_value = None
+        self.assertFalse(self.worker_obj.healthcheck())
 
     def test_delete(self):
         worker_id = self.worker_obj.model.id
