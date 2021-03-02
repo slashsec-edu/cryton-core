@@ -2,7 +2,6 @@ from typing import Union, Type
 from time import sleep
 import json
 from amqpstorm import Message
-
 from django.core import exceptions as django_exc
 
 from cryton.etc import config
@@ -15,7 +14,6 @@ from cryton.cryton_rest_api.models import (
     WorkerModel,
     CorrelationEvent
 )
-
 
 import uuid
 
@@ -110,37 +108,31 @@ class Worker:
         """
 
         msg = {'event_t': 'HEALTHCHECK'}
-        msg = json.dumps(msg)
 
-        # Message expires in 10 seconds
-        properties = dict(expiration="10000")
+        worker_rpc = WorkerRpc(healthcheck=True)
 
-        reply_to = config.Q_CONTROL_RESPONSE_NAME
-        correlation_id = util.rabbit_send_msg(self.control_q_name, msg,
-                                              self.model.id, reply_to,
-                                              properties=properties)
+        response = worker_rpc.call(self.control_q_name, 'HEALTHCHECK', msg, 5)
 
-        # Wait until correlation event get's deleted from DB (after successful event processing)
-        # after 5 seconds consider DOWN
-        for i in range(5):
-            try:
-                CorrelationEvent.objects.get(correlation_id=correlation_id)
-            except django_exc.ObjectDoesNotExist:
-                return True
-            sleep(1)
-
-        self.state = states.DOWN
-        return False
+        if response is not None and response.get('event_v').get('return_code') == 0:
+            self.state = states.UP
+            return True
+        else:
+            self.state = states.DOWN
+            return False
 
 
 class WorkerRpc(object):
 
-    def __init__(self):
+    def __init__(self, healthcheck: bool = False):
         """
 
         :return:
         """
 
+        if healthcheck:
+            self.queue_arguments = {'x-expires': 10000}
+        else:
+            self.queue_arguments = {}
         self.channel = None
         self.response = None
         self.connection = None
@@ -154,10 +146,10 @@ class WorkerRpc(object):
         self.channel = self.connection.channel()
 
         resp_q_name = str(uuid.uuid4())
-        result = self.channel.queue.declare(queue=resp_q_name, exclusive=False)
+        self.channel.queue.declare(queue=resp_q_name, exclusive=False, arguments=self.queue_arguments)
         self.callback_queue = resp_q_name
 
-        self.channel.basic.consume(self._on_response, no_ack=True,
+        self.channel.basic.consume(self.on_response, no_ack=True,
                                    queue=self.callback_queue)
 
     def close(self):
@@ -166,8 +158,10 @@ class WorkerRpc(object):
         self.channel.close()
         self.connection.close()
 
-    def call(self, q_name, method_name, method_args):
-        self.response = None
+    def call(self, q_name, method_name, method_args=None, time_limit: float = config.WORKER_HEALTHCHECK_TIMEOUT) -> dict:
+        if not method_args:
+            method_args = {}
+
         msg = {'event_t': method_name,
                **method_args}
         msg_json = json.dumps(msg)
@@ -177,11 +171,18 @@ class WorkerRpc(object):
         self.correlation_id = message.correlation_id
         message.publish(routing_key=q_name)
 
+        check = time_limit
+        self.channel.process_data_events()
         while not self.response:
             self.channel.process_data_events()
+            check -= 1
+            sleep(1)
+            if check <= 0:
+                break
+        self.channel.queue.delete(self.callback_queue)
         return self.response
 
-    def _on_response(self, message):
+    def on_response(self, message):
         if self.correlation_id != message.correlation_id:
             return
-        self.response = message.body
+        self.response = json.loads(message.body)
