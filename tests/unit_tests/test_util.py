@@ -1,5 +1,5 @@
 from django.test import TestCase
-from mock import patch, MagicMock, call
+from mock import patch, MagicMock, call, Mock
 import os
 import yaml
 import datetime
@@ -8,31 +8,38 @@ from model_bakery import baker
 import jinja2
 import copy
 
-from cryton.lib import util, logger
+from cryton.lib.util import util
 
 from cryton.cryton_rest_api.models import (
-    WorkerModel
+    WorkerModel,
+    StepModel,
+    StageExecutionModel,
+    StepExecutionModel
 )
-
 
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.util.logger.logger', util.logger.structlog.getLogger('cryton-debug'))
+@patch('amqpstorm.Connection', Mock())
 class TestUtil(TestCase):
 
     def setUp(self) -> None:
         self.worker = baker.make(WorkerModel)
 
-    @patch('cryton.lib.util.rabbit_connection')
+    @patch('cryton.lib.util.util.rabbit_connection')
     def test_execute_attack_module(self, mock_rabb):
+        self.stage_execution = baker.make(StageExecutionModel)
+        self.step_model = baker.make(StepModel)
+        self.step_execution_obj = StepExecutionModel.objects.create(step_model=self.step_model,
+                                                                    stage_execution=self.stage_execution)
         rabbit_channel = MagicMock()
         mock_rabb.return_value = (MagicMock(), MagicMock())
         # mock_rabb().execute().ret = json.dumps(ret_val)
 
         ret = util.execute_attack_module(rabbit_channel=rabbit_channel,
                                          attack_module='test', attack_module_arguments={'test': 'test'},
-                                         event_identification_value=1,
+                                         step_execution_id=self.step_execution_obj.id,
                                          worker_model=self.worker)
         self.assertIsInstance(ret, str)
 
@@ -51,7 +58,7 @@ class TestUtil(TestCase):
 
         self.assertFalse(os.path.isdir(dir_path))
 
-    @patch('cryton.lib.util.shutil.rmtree')
+    @patch('cryton.lib.util.util.shutil.rmtree')
     def test_rm_path_error(self, mock_rm):
         def raise_err(_):
             raise IOError()
@@ -76,7 +83,7 @@ class TestUtil(TestCase):
         ret = util.check_path('/no/' + dir_name, prefix)
         self.assertFalse(ret)
 
-    @patch('cryton.lib.util.time.time')
+    @patch('cryton.lib.util.util.time.time')
     def test_save_plan_evidence_file(self, mock_time):
         mock_time.return_value = 1588344064
         ret = util.save_plan_evidence_file('test', 'test', 'test')
@@ -86,7 +93,7 @@ class TestUtil(TestCase):
         with self.assertRaises(Exception):
             util.save_plan_evidence_file('test', 1, '')
 
-    @patch('cryton.lib.util.save_plan_evidence_file')
+    @patch('cryton.lib.util.util.save_plan_evidence_file')
     def test_store_evidence_file(self, mock_save):
         mock_save.return_value = 'path'
         ret = util.store_evidence_file('test', 'test', 'test')
@@ -100,8 +107,8 @@ class TestUtil(TestCase):
         with self.assertRaises(ValueError):
             util.store_evidence_file('test', '', 'test')
 
-    @patch('cryton.lib.util.save_plan_evidence_file')
-    @patch('cryton.lib.util.base64.b64decode')
+    @patch('cryton.lib.util.util.save_plan_evidence_file')
+    @patch('cryton.lib.util.util.base64.b64decode')
     def test_store_evidence_file(self, mock_decode, mock_save):
         def raise_err():
             raise Exception()
@@ -154,8 +161,7 @@ class TestUtil(TestCase):
         with self.assertRaises(jinja2.exceptions.UndefinedError):
             util.fill_template(plan_template, plan_inventory_part1, False)
 
-
-    @patch("cryton.lib.util.rabbit_connection")
+    @patch("cryton.lib.util.util.rabbit_connection")
     def test_rabbit_prepare_queue(self, mock_rabbit_connection):
         mock_channel = MagicMock()
         mock_queue = MagicMock()
@@ -183,10 +189,10 @@ class TestUtil(TestCase):
         ret = util.split_into_lists(input_list, 3)
         self.assertEqual(ret, [[1], [2], []])
 
-    @patch("cryton.lib.util.rabbit_connection")
-    @patch("cryton.lib.util.run_step_executions")
-    @patch("cryton.lib.util.split_into_lists", MagicMock(return_value=["exec1", "exec2", "exec3"]))
-    @patch("cryton.lib.util.Thread")
+    @patch("cryton.lib.util.util.rabbit_connection")
+    @patch("cryton.lib.util.util.run_step_executions")
+    @patch("cryton.lib.util.util.split_into_lists", MagicMock(return_value=["exec1", "exec2", "exec3"]))
+    @patch("cryton.lib.util.util.Thread")
     def test_run_executions_in_threads(self, mock_thread, mock_run_step_executions, mock_rabbit_connection):
         mock_conn = MagicMock()
         mock_rabbit_connection.return_value = mock_conn
@@ -212,11 +218,24 @@ class TestUtil(TestCase):
 
         channel.close.assert_called_once()
 
-    def test_get_from_mod_in(self):
+    def test_parse_dot_argument(self):
+        test_arg = "[te[1]st[s][][1]"
+        result = util.parse_dot_argument(test_arg)
+        self.assertEqual(["[te[1]st[s][]", "[1]"], result)
+
+    def test_parse_dot_argument_no_index(self):
+        test_arg = "test"
+        result = util.parse_dot_argument(test_arg)
+        self.assertEqual([test_arg], result)
+
+    @patch("cryton.lib.util.util.parse_dot_argument")
+    def test_get_from_mod_in(self, mock_parse_dot_arg):
+        mock_parse_dot_arg.side_effect = [["parent"], ["output"], ["username"]]
         resp = util.get_from_dict({'parent': {'output': {'username': 'admin'}}}, '$parent.output.username')
         self.assertEqual(resp, 'admin')
 
-        resp = util.get_from_dict({'a': [{'b': 1}, {'c': 2}]}, '$a.1.c')
+        mock_parse_dot_arg.side_effect = [["a", "[1]"], ["c"]]
+        resp = util.get_from_dict({'a': [{'b': 1}, {'c': 2}]}, '$a[1].c')
         self.assertEqual(resp, 2)
 
     def test_update_inner(self):

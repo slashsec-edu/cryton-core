@@ -5,26 +5,22 @@ import os
 import yaml
 from unittest.mock import patch, Mock, MagicMock
 
-from cryton.lib import (
-    run,
-    exceptions,
-    creator,
-    states,
-    logger,
-    step
-)
+from cryton.lib.util import creator, exceptions, logger, states
+from cryton.lib.models import step, run, plan
 
 from cryton.cryton_rest_api.models import (
     PlanModel,
     WorkerModel,
     StepExecutionModel
 )
+from django.utils import timezone
+
 
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
-@patch("cryton.lib.plan.os.makedirs", Mock())
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch("cryton.lib.models.plan.os.makedirs", Mock())
 class TestRun(TestCase):
 
     def setUp(self) -> None:
@@ -38,27 +34,27 @@ class TestRun(TestCase):
         self.workers_id_list = [self.worker_1.id, self.worker_2.id, self.worker_3.id]
         self.run_obj = run.Run(plan_model_id=self.plan_obj.id, workers_list=self.workers_list)
 
-    @patch('cryton.lib.scheduler_client.schedule_function', Mock(return_value=1))
-    @patch('cryton.lib.scheduler_client.remove_job', Mock(return_value=1))
-    @patch("cryton.lib.util.rabbit_send_oneway_msg", Mock())
+    @patch('cryton.lib.util.scheduler_client.schedule_function', Mock(return_value=1))
+    @patch('cryton.lib.util.scheduler_client.remove_job', Mock(return_value=1))
+    @patch("cryton.lib.util.util.rabbit_send_oneway_msg", Mock())
     def test_schedule(self):
         self.assertEqual(self.run_obj.state, states.PENDING)
 
         with self.assertRaises(exceptions.RunInvalidStateError):
-            self.run_obj.reschedule(datetime.datetime.utcnow())
+            self.run_obj.reschedule(timezone.now())
 
-        start_time_dt = datetime.datetime.utcnow()
-        self.run_obj.schedule(start_time_dt)
+        schedule_time_dt = timezone.now()
+        self.run_obj.schedule(schedule_time_dt)
 
         self.assertEqual(self.run_obj.state, states.SCHEDULED)
-        self.assertEqual(self.run_obj.start_time, start_time_dt)
+        self.assertEqual(self.run_obj.schedule_time, schedule_time_dt)
 
-        self.run_obj.reschedule(datetime.datetime.utcnow() + datetime.timedelta(minutes=5))
+        self.run_obj.reschedule(timezone.now() + datetime.timedelta(minutes=5))
         self.assertEqual(self.run_obj.state, states.SCHEDULED)
 
         self.run_obj.unschedule()
         self.assertEqual(self.run_obj.state, states.PENDING)
-        self.assertIsNone(self.run_obj.start_time)
+        self.assertIsNone(self.run_obj.schedule_time)
 
         self.run_obj.state = states.RUNNING
         for pex in self.run_obj.model.plan_executions.all():
@@ -70,9 +66,9 @@ class TestRun(TestCase):
         self.assertEqual(self.run_obj.state, states.PAUSED)
 
 
-    @patch("cryton.lib.util.rabbit_send_oneway_msg", Mock())
-    @patch('cryton.lib.scheduler_client.schedule_function')
-    @patch('cryton.lib.scheduler_client.remove_job')
+    @patch("cryton.lib.util.util.rabbit_send_oneway_msg", Mock())
+    @patch('cryton.lib.util.scheduler_client.schedule_function')
+    @patch('cryton.lib.util.scheduler_client.remove_job')
     def test_execute(self, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -94,13 +90,13 @@ class TestRun(TestCase):
 
         # this is a replacement for __change_conditional_state cause threading and django don't work well in tests
         for exec_obj in run_obj.model.plan_executions.all():
-            run.plan.PlanExecution(plan_execution_id=exec_obj.id).state = states.PAUSED
+            plan.PlanExecution(plan_execution_id=exec_obj.id).state = states.PAUSED
 
         run_obj.unpause()
         for exec_obj in run_obj.model.plan_executions.filter(worker_id__in=self.workers_id_list):
             self.assertEqual(exec_obj.state, states.RUNNING)
 
-    @patch('cryton.lib.scheduler_client.schedule_function')
+    @patch('cryton.lib.util.scheduler_client.schedule_function')
     def test_plan_run(self, mock_sched):
         mock_sched.return_value = 0
         with open(TESTS_DIR + '/plan.yaml') as plan_yaml:
@@ -109,7 +105,7 @@ class TestRun(TestCase):
         plan_obj = creator.create_plan(plan_dict)
         run_obj = run.Run(plan_model_id=plan_obj.model.id, workers_list=self.workers_list)
 
-        run_obj.schedule(datetime.datetime.utcnow())
+        run_obj.schedule(timezone.now())
 
         self.assertEqual(run_obj.state, states.SCHEDULED)
 
@@ -123,9 +119,9 @@ class TestRun(TestCase):
         run_obj = creator.create_run(plan_obj.model.id, [worker_obj.model])
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
-@patch("cryton.lib.plan.os.makedirs", Mock())
-@patch("cryton.lib.util.rabbit_send_oneway_msg", Mock())
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch("cryton.lib.models.plan.os.makedirs", Mock())
+@patch("cryton.lib.util.util.rabbit_send_oneway_msg", Mock())
 class TestVariables(TestCase):
 
     def setUp(self) -> None:
@@ -134,9 +130,9 @@ class TestVariables(TestCase):
         self.workers_list = [self.worker_1]
         pass
 
-    @patch('cryton.lib.scheduler_client.schedule_function')
-    @patch('cryton.lib.scheduler_client.remove_job')
-    @patch('cryton.lib.util.execute_attack_module')
+    @patch('cryton.lib.util.scheduler_client.schedule_function')
+    @patch('cryton.lib.util.scheduler_client.remove_job')
+    @patch('cryton.lib.util.util.execute_attack_module')
     def test_use_var(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -160,19 +156,19 @@ class TestVariables(TestCase):
         rabbit_channel = MagicMock()
         step.StepExecution(step_execution_id=step_ex_obj_2.id).execute(rabbit_channel=rabbit_channel)
 
-        step_arguments = {'arguments': {'cmd': 'testing'}}
+        step_arguments = {'cmd': 'testing'}
 
         moc_exec.assert_called_with(
             rabbit_channel=rabbit_channel,
             attack_module=step_ex_obj_2.step_model.attack_module,
             attack_module_arguments=step_arguments,
             worker_model=step_ex_obj_2.stage_execution.plan_execution.worker,
-            event_identification_value=step_ex_obj_2.id,
+            step_execution_id=step_ex_obj_2.id,
             executor=step_ex_obj_2.step_model.executor)
 
-    @patch('cryton.lib.scheduler_client.schedule_function')
-    @patch('cryton.lib.scheduler_client.remove_job')
-    @patch('cryton.lib.util.execute_attack_module')
+    @patch('cryton.lib.util.scheduler_client.schedule_function')
+    @patch('cryton.lib.util.scheduler_client.remove_job')
+    @patch('cryton.lib.util.util.execute_attack_module')
     def test_use_var_prefix(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -196,19 +192,19 @@ class TestVariables(TestCase):
         rabbit_channel = MagicMock()
         step.StepExecution(step_execution_id=step_ex_obj_2.id).execute(rabbit_channel=rabbit_channel)
 
-        step_arguments = {'arguments': {'cmd': 'testing'}}
+        step_arguments = {'cmd': 'testing'}
 
         moc_exec.assert_called_with(
             rabbit_channel=rabbit_channel,
             attack_module=step_ex_obj_2.step_model.attack_module,
             attack_module_arguments=step_arguments,
             worker_model=step_ex_obj_2.stage_execution.plan_execution.worker,
-            event_identification_value=step_ex_obj_2.id,
+            step_execution_id=step_ex_obj_2.id,
             executor=step_ex_obj_2.step_model.executor)
 
-    @patch('cryton.lib.scheduler_client.schedule_function')
-    @patch('cryton.lib.scheduler_client.remove_job')
-    @patch('cryton.lib.util.execute_attack_module')
+    @patch('cryton.lib.util.scheduler_client.schedule_function')
+    @patch('cryton.lib.util.scheduler_client.remove_job')
+    @patch('cryton.lib.util.util.execute_attack_module')
     def test_use_var_mapping(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -232,19 +228,19 @@ class TestVariables(TestCase):
         rabbit_channel = MagicMock()
         step.StepExecution(step_execution_id=step_ex_obj_2.id).execute(rabbit_channel=rabbit_channel)
 
-        step_arguments = {'arguments': {'cmd': 'testing'}}
+        step_arguments = {'cmd': 'testing'}
 
         moc_exec.assert_called_with(
             rabbit_channel=rabbit_channel,
             attack_module=step_ex_obj_2.step_model.attack_module,
             attack_module_arguments=step_arguments,
             worker_model=step_ex_obj_2.stage_execution.plan_execution.worker,
-            event_identification_value=step_ex_obj_2.id,
+            step_execution_id=step_ex_obj_2.id,
             executor=step_ex_obj_2.step_model.executor)
 
-    @patch('cryton.lib.scheduler_client.schedule_function')
-    @patch('cryton.lib.scheduler_client.remove_job')
-    @patch('cryton.lib.util.execute_attack_module')
+    @patch('cryton.lib.util.scheduler_client.schedule_function')
+    @patch('cryton.lib.util.scheduler_client.remove_job')
+    @patch('cryton.lib.util.util.execute_attack_module')
     def test_use_var_parent(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -270,12 +266,12 @@ class TestVariables(TestCase):
         succ_step_ex_obj.parent_id = step_ex_obj.model.id
         succ_step_ex_obj.execute(rabbit_channel=rabbit_channel)
 
-        step_arguments = {'arguments': {'cmd': 'testing'}}
+        step_arguments = {'cmd': 'testing'}
 
         moc_exec.assert_called_with(
             rabbit_channel=rabbit_channel,
             attack_module=step_ex_obj_2.step_model.attack_module,
             attack_module_arguments=step_arguments,
             worker_model=step_ex_obj_2.stage_execution.plan_execution.worker,
-            event_identification_value=step_ex_obj_2.id,
+            step_execution_id=step_ex_obj_2.id,
             executor=step_ex_obj_2.step_model.executor)

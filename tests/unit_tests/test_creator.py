@@ -1,15 +1,8 @@
 from django.test import TestCase
 from copy import deepcopy
 
-from cryton.lib import (
-    creator,
-    exceptions,
-    step,
-    stage,
-    plan,
-    logger,
-    worker
-)
+from cryton.lib.util import creator, exceptions, logger
+from cryton.lib.models import stage, plan, step, worker
 
 from cryton.cryton_rest_api.models import (
     PlanModel,
@@ -27,7 +20,7 @@ from unittest.mock import patch
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
 class TestCreator(TestCase):
 
     def setUp(self) -> None:
@@ -181,7 +174,7 @@ class TestCreator(TestCase):
         with self.assertRaises(exceptions.PlanValidationError):
             creator.create_plan(plan_dict)
 
-        mock_validation = patch('cryton.lib.creator.validate_plan_dict')
+        mock_validation = patch('cryton.lib.util.creator.validate_plan_dict')
         mock_validation.start()
         with self.assertRaises(exceptions.PlanCreationFailedError):
             creator.create_plan(plan_dict)
@@ -213,7 +206,7 @@ class TestCreator(TestCase):
         with self.assertRaises(exceptions.WrongParameterError):
             creator.create_worker('', 'address')
 
-    @patch('cryton.lib.creator.create_step')
+    @patch('cryton.lib.util.creator.create_step')
     def test_create_plan_err(self, mock_create_step):
         mock_create_step.side_effect = exceptions.StepCreationFailedError('debug')
         with open('{}/plan.yaml'.format(TESTS_DIR)) as fp:

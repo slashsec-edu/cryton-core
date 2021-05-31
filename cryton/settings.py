@@ -49,7 +49,7 @@ TEMPLATES = [
 
 CORS_ORIGIN_ALLOW_ALL = True
 
-DEBUG = True
+DEBUG = True if 'True' == os.getenv('CRYTON_DEBUG', 'False') else False
 
 ALLOWED_HOSTS = "*"
 
@@ -82,7 +82,7 @@ else:
 ROOT_URLCONF = 'cryton.urls'
 
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, "static/")
+STATIC_ROOT = '/usr/local/apache2/web/static/'
 
 # OIDC Authentication
 

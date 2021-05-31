@@ -7,7 +7,6 @@ store.sqlite3
 build/
 dist/
 *.egg-info/
-migrations/
 uploads/
 
 .pybuild/

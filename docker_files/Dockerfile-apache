@@ -1,0 +1,7 @@
+FROM httpd:latest
+RUN mkdir web/
+WORKDIR web/
+COPY docker_files/apache-conf/httpd.conf /usr/local/apache2/conf/httpd.conf
+COPY docker_files/apache-conf/hp-vhosts.conf /usr/local/apache2/conf/extra/httpd-vhosts.conf
+COPY cryton/static/ /usr/local/apache2/web/static/
+RUN chmod -R 755 /usr/local/apache2/web/static/

@@ -1,16 +1,11 @@
 from setuptools import setup, find_packages
-import os
 from os.path import expanduser
-import glob
-
-datadir = 'cryton/etc'
-datafiles = [(datadir, list(glob.glob(os.path.join(datadir, '*'))))]
 
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(name='cryton',
-      version='2020.4.1',
+      version='2021.2.1',
       description='Cryton - Attack scenario automation toolset',
       url='https://gitlab.ics.muni.cz/beast-public/cryton/cryton-core',
       author='Ivo Nutar, Jiri Raja, Andrej Tomci',
@@ -21,10 +16,7 @@ setup(name='cryton',
       zip_safe=False,
       data_files=[(expanduser('~/.cryton/'), []),
                   (expanduser('~/.cryton/reports'), []),
-                  (expanduser('~/.cryton/evidence'), []),
-                  ('/etc/cryton/', []),
-                  ('/etc/cryton', ['cryton/etc/logging_config.yaml']),
-                  ('/etc/cryton', glob.glob('cryton/etc/config.*'))],
+                  (expanduser('~/.cryton/evidence'), [])],
       entry_points={
           'console_scripts': [
               'cryton-manage=cryton.manage:main'

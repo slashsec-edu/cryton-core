@@ -79,7 +79,6 @@ Creating app       ... done
 After that, you should run database migrations:
 
 ~~~~
-user@localhost:~ /cryton-core $ docker-compose exec cryton_app cryton-manage makemigrations cryton_rest_api
 user@localhost:~ /cryton-core $ docker-compose exec cryton_app cryton-manage migrate
 ~~~~
 
@@ -154,7 +153,6 @@ MISFIRE_GRACE_TIME: 60
 After successful installation the only thing needed is Django _migration_ for creating default tables in Cryton database:
 
 ```
-(cryton-oop) user@localhost:~/cryton-oop$ cryton-manage makemigrations cryton_rest_api
 (cryton-oop) user@localhost:~/cryton-oop$ cryton-manage migrate
 ```
 To check if installation was successfull try to start the REST API:

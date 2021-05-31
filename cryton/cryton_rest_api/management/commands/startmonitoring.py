@@ -4,7 +4,8 @@ import threading
 from django.core.management.base import BaseCommand
 from django.db import connection
 
-from cryton.lib import scheduler_client, worker, logger
+from cryton.lib.util import logger, scheduler_client
+from cryton.lib.models import worker
 
 
 def monitor_health():

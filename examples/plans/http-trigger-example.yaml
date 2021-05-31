@@ -1,0 +1,34 @@
+---
+plan:
+  name: Http-trigger example
+  owner: test name
+  stages:
+  - name: stage-one
+    trigger_type: delta
+    trigger_args:
+      seconds: 5
+    steps:
+      - name: get-request
+        is_init: true
+        attack_module: mod_cmd
+        attack_module_args:
+          cmd: "curl http://localhost:8082/index?a=1" # this is just to trigger HTTPListener
+  - name: stage-two
+    depends_on:
+      - stage-one
+    trigger_type: HTTPListener
+    trigger_args:
+      host: localhost
+      port: 8082
+      routes:
+        - path: /index
+          method: GET
+          parameters:
+            - name: a
+              value: "1"
+    steps:
+    - name: scan-localhost
+      is_init: true
+      attack_module: mod_nmap
+      attack_module_args:
+        target: 127.0.0.1

@@ -1,0 +1,163 @@
+id: 2
+plan_id: 2
+plan_name: Simulation example
+state: FINISHED
+schedule_time: null
+start_time: '2021-05-28T13:23:36.464299'
+pause_time: null
+finish_time: '2021-05-28T13:23:54.223731'
+plan_executions:
+- id: 2
+  stage_name: Simulation example
+  state: FINISHED
+  schedule_time: null
+  start_time: '2021-05-28T13:23:36.472807'
+  finish_time: '2021-05-28T13:23:54.201377'
+  pause_time: null
+  worker_id: 1
+  worker_name: worker1
+  evidence_dir: /root/.cryton/evidence/plan_002-Simulation_example/run_2/worker_worker1
+  stage_executions:
+  - id: 2
+    stage_name: stage-one
+    state: FINISHED
+    start_time: '2021-05-28T13:23:41.650494'
+    pause_time: null
+    finish_time: '2021-05-28T13:23:54.178903'
+    schedule_time: '2021-05-28T13:23:41.536913'
+    step_executions:
+    - id: 3
+      step_name: scan-localhost
+      state: FINISHED
+      start_time: '2021-05-28T13:23:41.695893'
+      finish_time: '2021-05-28T13:23:42.300657'
+      std_err: No error
+      std_out: null
+      mod_err: null
+      mod_out:
+        127.0.0.1:
+          ports:
+          - cpe:
+            - cpe: cpe:/o:linux:linux_kernel
+            state: open
+            portid: '22'
+            reason: syn-ack
+            scripts: []
+            service:
+              conf: '10'
+              name: ssh
+              method: probed
+              ostype: Linux
+              product: OpenSSH
+              version: 8.4p1 Debian 5
+              extrainfo: protocol 2.0
+            protocol: tcp
+            reason_ttl: '0'
+          state:
+            state: up
+            reason: conn-refused
+            reason_ttl: '0'
+          osmatch: {}
+          hostname:
+          - name: localhost
+            type: PTR
+          macaddress: null
+      evidence_file: No evidence
+      result: OK
+      valid: false
+    - id: 4
+      step_name: bruteforce
+      state: FINISHED
+      start_time: '2021-05-28T13:23:42.423394'
+      finish_time: '2021-05-28T13:23:42.635883'
+      std_err: No error
+      std_out: null
+      mod_err: ''
+      mod_out:
+        password: vagrant
+        username: vagrant
+      evidence_file: No evidence
+      result: OK
+      valid: false
+    - id: 5
+      step_name: ssh-session
+      state: FINISHED
+      start_time: '2021-05-28T13:23:42.767205'
+      finish_time: '2021-05-28T13:23:49.774188'
+      std_err: No error
+      std_out: null
+      mod_err: null
+      mod_out: 'RHOSTS => 127.0.0.1
+
+        PASSWORD => vagrant
+
+        USERNAME => vagrant
+
+        [*] Auxiliary module running as background job 3.
+
+        [*] 127.0.0.1:22 - Starting bruteforce
+
+        [+] 127.0.0.1:22 - Success: ''vagrant:vagrant'' ''uid=1000(vagrant) gid=1000(vagrant)
+        groups=1000(vagrant),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev),109(netdev),119(bluetooth),122(kali-trusted),133(scanner),142(kaboxer),143(docker)
+        Linux kali 5.10.0-kali7-amd64 #1 SMP Debian 5.10.28-1kali1 (2021-04-12) x86_64
+        GNU/Linux ''
+
+        [*] Command shell session 4 opened (127.0.0.1:34743 -> 127.0.0.1:22) at 2021-05-28
+        15:23:45 +0200
+
+        [*] Scanned 1 of 1 hosts (100% complete)
+
+        '
+      evidence_file: No evidence
+      result: OK
+      valid: false
+    - id: 6
+      step_name: session-cmd
+      state: FINISHED
+      start_time: '2021-05-28T13:23:49.895716'
+      finish_time: '2021-05-28T13:23:54.106940'
+      std_err: No error
+      std_out: null
+      mod_err: null
+      mod_out: "\u250F\u2501(\e[1;31mMessage from Kali developers\e[00m)\n\u2503\n\
+        \u2503 We have kept /usr/bin/python pointing to Python 2 for backwards\n\u2503\
+        \ compatibility. Learn how to change this and avoid this message:\n\u2503\
+        \ \u21D2 https://www.kali.org/docs/general-use/python3-transition/\n\u2503\
+        \n\u2517\u2501(\e[2;37mRun: \u201Ctouch ~/.hushlogin\u201D to hide this message\e\
+        [0m)\nroot:x:0:0:root:/root:/usr/bin/zsh\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\n\
+        bin:x:2:2:bin:/bin:/usr/sbin/nologin\nsys:x:3:3:sys:/dev:/usr/sbin/nologin\n\
+        sync:x:4:65534:sync:/bin:/bin/sync\ngames:x:5:60:games:/usr/games:/usr/sbin/nologin\n\
+        man:x:6:12:man:/var/cache/man:/usr/sbin/nologin\nlp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin\n\
+        mail:x:8:8:mail:/var/mail:/usr/sbin/nologin\nnews:x:9:9:news:/var/spool/news:/usr/sbin/nologin\n\
+        uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin\nproxy:x:13:13:proxy:/bin:/usr/sbin/nologin\n\
+        www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin\nbackup:x:34:34:backup:/var/backups:/usr/sbin/nologin\n\
+        list:x:38:38:Mailing List Manager:/var/list:/usr/sbin/nologin\nirc:x:39:39:ircd:/run/ircd:/usr/sbin/nologin\n\
+        gnats:x:41:41:Gnats Bug-Reporting System (admin):/var/lib/gnats:/usr/sbin/nologin\n\
+        nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin\n_apt:x:100:65534::/nonexistent:/usr/sbin/nologin\n\
+        systemd-timesync:x:101:101:systemd Time Synchronization,,,:/run/systemd:/usr/sbin/nologin\n\
+        systemd-network:x:102:103:systemd Network Management,,,:/run/systemd:/usr/sbin/nologin\n\
+        systemd-resolve:x:103:104:systemd Resolver,,,:/run/systemd:/usr/sbin/nologin\n\
+        mysql:x:104:110:MySQL Server,,,:/nonexistent:/bin/false\ntss:x:105:111:TPM\
+        \ software stack,,,:/var/lib/tpm:/bin/false\nstrongswan:x:106:65534::/var/lib/strongswan:/usr/sbin/nologin\n\
+        ntp:x:107:113::/nonexistent:/usr/sbin/nologin\nmessagebus:x:108:114::/nonexistent:/usr/sbin/nologin\n\
+        redsocks:x:109:115::/var/run/redsocks:/usr/sbin/nologin\nrwhod:x:110:65534::/var/spool/rwho:/usr/sbin/nologin\n\
+        iodine:x:111:65534::/run/iodine:/usr/sbin/nologin\nmiredo:x:112:65534::/var/run/miredo:/usr/sbin/nologin\n\
+        _rpc:x:113:65534::/run/rpcbind:/usr/sbin/nologin\nusbmux:x:114:46:usbmux daemon,,,:/var/lib/usbmux:/usr/sbin/nologin\n\
+        tcpdump:x:115:120::/nonexistent:/usr/sbin/nologin\nrtkit:x:116:121:RealtimeKit,,,:/proc:/usr/sbin/nologin\n\
+        sshd:x:117:65534::/run/sshd:/usr/sbin/nologin\nstatd:x:118:65534::/var/lib/nfs:/usr/sbin/nologin\n\
+        postgres:x:119:123:PostgreSQL administrator,,,:/var/lib/postgresql:/bin/bash\n\
+        avahi:x:120:125:Avahi mDNS daemon,,,:/run/avahi-daemon:/usr/sbin/nologin\n\
+        stunnel4:x:121:126::/var/run/stunnel4:/usr/sbin/nologin\nDebian-snmp:x:122:127::/var/lib/snmp:/bin/false\n\
+        sslh:x:123:128::/nonexistent:/usr/sbin/nologin\nnm-openvpn:x:124:129:NetworkManager\
+        \ OpenVPN,,,:/var/lib/openvpn/chroot:/usr/sbin/nologin\nnm-openconnect:x:125:130:NetworkManager\
+        \ OpenConnect plugin,,,:/var/lib/NetworkManager:/usr/sbin/nologin\npulse:x:126:131:PulseAudio\
+        \ daemon,,,:/var/run/pulse:/usr/sbin/nologin\nsaned:x:127:134::/var/lib/saned:/usr/sbin/nologin\n\
+        inetsim:x:128:136::/var/lib/inetsim:/usr/sbin/nologin\ncolord:x:129:137:colord\
+        \ colour management daemon,,,:/var/lib/colord:/usr/sbin/nologin\ngeoclue:x:130:138::/var/lib/geoclue:/usr/sbin/nologin\n\
+        lightdm:x:131:139:Light Display Manager:/var/lib/lightdm:/bin/false\nking-phisher:x:132:140::/var/lib/king-phisher:/usr/sbin/nologin\n\
+        vagrant:x:1000:1000:vagrant,,,:/home/vagrant:/usr/bin/zsh\nsystemd-coredump:x:999:999:systemd\
+        \ Core Dumper:/:/usr/sbin/nologin\nspeech-dispatcher:x:133:29:Speech Dispatcher,,,:/run/speech-dispatcher:/bin/false\n\
+        vboxadd:x:998:1::/var/run/vboxadd:/bin/false\n"
+      evidence_file: No evidence
+      result: OK
+      valid: false

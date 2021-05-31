@@ -2,14 +2,8 @@ from django.test import TestCase
 from unittest.mock import patch, Mock, MagicMock
 import os
 import datetime
-from cryton.lib import (
-    run,
-    plan,
-    exceptions,
-    states,
-    logger,
-    creator
-)
+from cryton.lib.util import exceptions, logger, states
+from cryton.lib.models import plan, run
 
 from cryton.cryton_rest_api.models import (
     PlanModel,
@@ -21,11 +15,12 @@ from cryton.cryton_rest_api.models import (
 )
 
 from model_bakery import baker
+from django.utils import timezone
 
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
 class RunTest(TestCase):
 
     def setUp(self) -> None:
@@ -71,8 +66,8 @@ class RunTest(TestCase):
             self.assertEqual(len(run.Run.filter(non_existent=False)), 1)
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
-@patch('cryton.lib.states.RunStateMachine.validate_transition', MagicMock())
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.states.RunStateMachine.validate_transition', MagicMock())
 class RunTestAdvanced(TestCase):
 
     def setUp(self) -> None:
@@ -105,25 +100,25 @@ class RunTestAdvanced(TestCase):
                          PlanExecutionModel.objects.filter(worker=self.worker1,
                                                            run=run_obj.model).latest('id'))
 
-    @patch('cryton.lib.scheduler_client.schedule_function')
+    @patch('cryton.lib.util.scheduler_client.schedule_function')
     def test_schedule(self, mock_sched):
         mock_sched.return_value = 0
-        start_time = datetime.datetime.now()
+        schedule_time = timezone.now()
         run_obj = run.Run(plan_model_id=self.plan_model.id, workers_list=self.workers_list)
 
         with self.assertLogs('cryton-debug', level='INFO') as cm:
-            run_obj.schedule(start_time)
+            run_obj.schedule(schedule_time)
         self.assertIn("run scheduled", cm.output[-1])
-        self.assertEqual(run_obj.start_time, start_time)
+        self.assertEqual(run_obj.schedule_time, schedule_time)
 
-    @patch('cryton.lib.scheduler_client.schedule_function', Mock(return_value=1))
-    @patch('cryton.lib.scheduler_client.remove_job', Mock(return_value=1))
+    @patch('cryton.lib.util.scheduler_client.schedule_function', Mock(return_value=1))
+    @patch('cryton.lib.util.scheduler_client.remove_job', Mock(return_value=1))
     def test_reschedule(self):
-        start_time = datetime.datetime.now()
+        schedule_time = timezone.now()
         run_obj = run.Run(plan_model_id=self.plan_model.id, workers_list=self.workers_list)
         # Incorrect state
         with self.assertRaises(exceptions.RunInvalidStateError), self.assertLogs('cryton-debug', level='ERROR') as cm:
-            run_obj.reschedule(start_time)
+            run_obj.reschedule(schedule_time)
 
         self.assertIn("invalid state detected", cm.output[0])
 
@@ -131,21 +126,21 @@ class RunTestAdvanced(TestCase):
         run_obj.state = states.SCHEDULED
 
         with self.assertLogs('cryton-debug', level='INFO') as cm:
-            run_obj.reschedule(start_time + datetime.timedelta(minutes=10))
+            run_obj.reschedule(schedule_time + datetime.timedelta(minutes=10))
 
         self.assertIn("run unscheduled", cm.output[0])
         self.assertIn("run scheduled", cm.output[1])
         self.assertIn("run rescheduled", cm.output[2])
-        self.assertEqual(run_obj.start_time, start_time + datetime.timedelta(minutes=10))
+        self.assertEqual(run_obj.schedule_time, schedule_time + datetime.timedelta(minutes=10))
 
-    @patch('cryton.lib.plan.PlanExecution.pause', Mock())
+    @patch('cryton.lib.models.plan.PlanExecution.pause', Mock())
     def test_pause(self):
         run_obj = run.Run(plan_model_id=self.plan_model.id, workers_list=self.workers_list)
         # Correct state
         run_obj.state = states.RUNNING
         run_obj.pause()
 
-    @patch('cryton.lib.plan.PlanExecution.unpause', Mock())
+    @patch('cryton.lib.models.plan.PlanExecution.unpause', Mock())
     def test_unpause(self):
         run_obj = run.Run(plan_model_id=self.plan_model.id, workers_list=self.workers_list)
 
@@ -156,8 +151,8 @@ class RunTestAdvanced(TestCase):
             run_obj.unpause()
         self.assertEqual(run_obj.state, states.RUNNING)
 
-    @patch('cryton.lib.scheduler_client.schedule_function', Mock(return_value=1))
-    @patch('cryton.lib.scheduler_client.remove_job', Mock(return_value=1))
+    @patch('cryton.lib.util.scheduler_client.schedule_function', Mock(return_value=1))
+    @patch('cryton.lib.util.scheduler_client.remove_job', Mock(return_value=1))
     def test_postpone(self):
 
         dt = datetime.timedelta(hours=1)
@@ -171,8 +166,8 @@ class RunTestAdvanced(TestCase):
 
         # Correct state
         run_obj.state = states.SCHEDULED
-        run_obj.start_time = datetime.datetime.now()
-        start_time_dt = run_obj.start_time
+        run_obj.schedule_time = timezone.now()
+        schedule_time_dt = run_obj.schedule_time
         for pex in run_obj.model.plan_executions.all():
             plan.PlanExecution(plan_execution_id=pex.id).state = states.SCHEDULED
         for pex in run_obj.model.plan_executions.all():
@@ -184,9 +179,9 @@ class RunTestAdvanced(TestCase):
         self.assertIn("run unscheduled", cm.output[0])
         self.assertIn("run scheduled", cm.output[1])
         self.assertIn("run postponed", cm.output[2])
-        self.assertEqual(run_obj.start_time, start_time_dt + dt)
+        self.assertEqual(run_obj.schedule_time, schedule_time_dt + dt)
 
-    @patch('cryton.lib.plan.PlanExecution.kill', Mock())
+    @patch('cryton.lib.models.plan.PlanExecution.kill', Mock())
     def test_kill(self):
         run_obj = run.Run(plan_model_id=self.plan_model.id, workers_list=self.workers_list)
         for plan_ex_model in run_obj.model.plan_executions.all():

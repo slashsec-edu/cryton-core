@@ -1,0 +1,81 @@
+id: 1
+plan_id: 1
+plan_name: Basic example
+state: FINISHED
+schedule_time: null
+start_time: '2021-05-28T13:20:45.013034'
+pause_time: null
+finish_time: '2021-05-28T13:20:58.466036'
+plan_executions:
+- id: 1
+  stage_name: Basic example
+  state: FINISHED
+  schedule_time: null
+  start_time: '2021-05-28T13:20:45.021713'
+  finish_time: '2021-05-28T13:20:58.444833'
+  pause_time: null
+  worker_id: 1
+  worker_name: worker1
+  evidence_dir: /root/.cryton/evidence/plan_001-Basic_example/run_1/worker_worker1
+  stage_executions:
+  - id: 1
+    stage_name: stage-one
+    state: FINISHED
+    start_time: '2021-05-28T13:20:50.228374'
+    pause_time: null
+    finish_time: '2021-05-28T13:20:58.424359'
+    schedule_time: '2021-05-28T13:20:50.087341'
+    step_executions:
+    - id: 1
+      step_name: scan-localhost
+      state: FINISHED
+      start_time: '2021-05-28T13:20:50.280125'
+      finish_time: '2021-05-28T13:20:50.993209'
+      std_err: No error
+      std_out: null
+      mod_err: null
+      mod_out:
+        127.0.0.1:
+          ports:
+          - cpe:
+            - cpe: cpe:/o:linux:linux_kernel
+            state: open
+            portid: '22'
+            reason: syn-ack
+            scripts: []
+            service:
+              conf: '10'
+              name: ssh
+              method: probed
+              ostype: Linux
+              product: OpenSSH
+              version: 8.4p1 Debian 5
+              extrainfo: protocol 2.0
+            protocol: tcp
+            reason_ttl: '0'
+          state:
+            state: up
+            reason: conn-refused
+            reason_ttl: '0'
+          osmatch: {}
+          hostname:
+          - name: localhost
+            type: PTR
+          macaddress: null
+      evidence_file: No evidence
+      result: OK
+      valid: false
+    - id: 2
+      step_name: bruteforce
+      state: FINISHED
+      start_time: '2021-05-28T13:20:51.110999'
+      finish_time: '2021-05-28T13:20:58.338349'
+      std_err: No error
+      std_out: null
+      mod_err: ''
+      mod_out:
+        password: vagrant
+        username: vagrant
+      evidence_file: No evidence
+      result: OK
+      valid: false

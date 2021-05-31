@@ -1,19 +1,11 @@
 from django.test import TestCase
-from mock import patch, MagicMock, Mock
+from mock import patch, Mock, MagicMock
 
-from cryton.lib import (
-    logger,
-    worker,
-    creator,
-    exceptions
-)
-
-from cryton.cryton_rest_api.models import (
-    CorrelationEvent
-)
+from cryton.lib.util import creator, exceptions, logger
+from cryton.lib.models import worker
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
 class TestWorker(TestCase):
 
     def setUp(self) -> None:
@@ -35,7 +27,7 @@ class TestWorker(TestCase):
     def test_properties_name(self):
         self.worker_obj.name = 'some-name'
         self.assertEqual(self.worker_obj.name, 'some-name')
-        
+
     def test_properties_state(self):
         self.worker_obj.state = 'some-state'
         self.assertEqual(self.worker_obj.state, 'some-state')
@@ -48,14 +40,18 @@ class TestWorker(TestCase):
         self.assertEqual(self.worker_obj.control_q_name, 'cryton_worker.{}.control.request'
                          .format(self.worker_obj.q_prefix))
 
-    @patch('cryton.lib.worker.sleep', return_value=None)
-    @patch('cryton.lib.worker.WorkerRpc.call')
-    def test_healthcheck(self, mock_rab, mock_sleep):
-        mock_rab.return_value = {'event_v': {'return_code': 0}}
+    @patch('cryton.lib.util.util.Rpc.__enter__')
+    def test_healthcheck(self, mock_rab):
+        mock_call = Mock()
+        mock_call.call = Mock(return_value={'event_v': {'return_code': 0}})
+        mock_rab.return_value = mock_call
         self.assertTrue(self.worker_obj.healthcheck())
-        mock_rab.return_value = {'event_v': {'return_code': -1}}
+        mock_call.call = Mock(return_value={'event_v': {'return_code': -1}})
+        mock_rab.return_value = mock_call
+
         self.assertFalse(self.worker_obj.healthcheck())
-        mock_rab.return_value = None
+        mock_call.call = Mock(return_value=None)
+        mock_rab.return_value = mock_call
         self.assertFalse(self.worker_obj.healthcheck())
 
     def test_delete(self):
@@ -63,4 +59,3 @@ class TestWorker(TestCase):
         self.assertTrue(worker.WorkerModel.objects.filter(id=worker_id).exists())
         self.worker_obj.delete()
         self.assertFalse(worker.WorkerModel.objects.filter(id=worker_id).exists())
-

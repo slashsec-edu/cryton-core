@@ -1,27 +1,20 @@
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 import yaml
 import os
 
-from unittest.mock import patch, Mock, MagicMock
+from unittest.mock import patch, MagicMock
 
-from cryton.lib import (
-    util,
-    creator,
-    run,
-    states,
-    plan,
-    stage,
-    logger,
-)
-
+from cryton.lib.util import creator, logger, states, util
+from cryton.lib.models import stage, plan, run, step
 
 from cryton.etc import config
 import threading
+from model_bakery import baker
 
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
 class TestRabbit(TestCase):
 
     def setUp(self):
@@ -35,10 +28,14 @@ class TestRabbit(TestCase):
     def test_send_msg(self):
         conn = util.rabbit_connection()
         channel = conn.channel()
-        correlation_id = util.rabbit_send_msg(channel, self.worker.control_q_name, "msg", 1,
+        self.stage_execution = baker.make(stage.StageExecutionModel)
+        self.step_model = baker.make(step.StepModel)
+        self.step_execution_obj = step.StepExecutionModel.objects.create(step_model=self.step_model,
+                                                                         stage_execution=self.stage_execution)
+        correlation_id = util.rabbit_send_msg(channel, self.worker.control_q_name, "msg", self.step_execution_obj.id,
                                               config.Q_CONTROL_RESPONSE_NAME)
         self.assertIsInstance(correlation_id, str)
-        correlation_id = util.rabbit_send_msg(channel, self.worker.attack_q_name, "msg", 1,
+        correlation_id = util.rabbit_send_msg(channel, self.worker.attack_q_name, "msg", self.step_execution_obj.id,
                                               config.Q_ATTACK_RESPONSE_NAME)
         self.assertIsInstance(correlation_id, str)
 
@@ -56,6 +53,7 @@ class TestRabbit(TestCase):
             plan_execution_id=plan_ex_obj.model.id).id)
 
         def se():
+            stage_ex_obj.state = states.SCHEDULED
             t = threading.Thread(stage.execution(stage_ex_obj.model.id))
             t.run()
 

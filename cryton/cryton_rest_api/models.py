@@ -1,10 +1,5 @@
 from django.db import models
-from django.db.models import JSONField
-
-from cryton.lib import (
-    constants as co,
-    states as st
-)
+from cryton.lib.util import constants as co, states as st
 
 from cryton.etc import config
 
@@ -36,7 +31,7 @@ class InstanceModel(AdvancedModel):
 class PlanModel(InstanceModel):
     owner = models.TextField(blank=True, null=True)
     evidence_dir = models.TextField(blank=True, null=True)
-    plan_dict = JSONField()
+    plan_dict = models.JSONField()
 
     class Meta:
         db_table = 'plan_model'
@@ -47,7 +42,7 @@ class StageModel(InstanceModel):
     plan_model = models.ForeignKey(PlanModel, on_delete=models.CASCADE, related_name='stages')
     executor = models.TextField(null=True, blank=True)
     trigger_type = models.TextField()
-    trigger_args = JSONField()
+    trigger_args = models.JSONField()
 
     class Meta:
         db_table = 'stage_model'
@@ -57,13 +52,10 @@ class StageModel(InstanceModel):
 class StepModel(InstanceModel):
     stage_model = models.ForeignKey(StageModel, on_delete=models.CASCADE, related_name='steps')
     attack_module = models.TextField()
-    attack_module_args = JSONField()
+    attack_module_args = models.JSONField()
     is_init = models.BooleanField(default=False)
     is_final = models.BooleanField(default=False)
     executor = models.TextField(null=True, blank=True)
-    create_named_session = models.TextField(null=True, blank=True)
-    use_named_session = models.TextField(null=True, blank=True)
-    use_any_session_to_target = models.TextField(null=True, blank=True)
     # changed to step name or user specified prefix at creation time
     output_prefix = models.TextField(blank=False, default='')
 
@@ -77,6 +69,7 @@ class RunModel(TimeStampedModel):
     # PENDING, PREPARED, SCHEDULE etc
     state = models.TextField(default=st.PENDING)
     aps_job_id = models.TextField(default=None, null=True)
+    schedule_time = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = "run"
@@ -103,6 +96,7 @@ class PlanExecutionModel(ExecutionModel):
     worker = models.ForeignKey(WorkerModel, related_name='plan_executions', on_delete=models.PROTECT)
     aps_job_id = models.TextField(default=None, null=True)
     evidence_dir = models.TextField(blank=True, null=True)
+    schedule_time = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = 'plan_execution'
@@ -164,7 +158,8 @@ class SuccessorModel(models.Model):
 class CorrelationEvent(models.Model):
     correlation_id = models.TextField()
     # step_execution_id, plan_execution_id, run_id etc.
-    event_identification_value = models.IntegerField(default=0)
+    step_execution = models.ForeignKey(StepExecutionModel, on_delete=models.CASCADE,
+                                          related_name="correlation_events", null=True)
     worker_q_name = models.TextField(blank=True, null=True)
     state = models.TextField(default='PENDING')
 

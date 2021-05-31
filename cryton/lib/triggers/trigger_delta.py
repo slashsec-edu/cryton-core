@@ -1,17 +1,10 @@
 from datetime import datetime, timedelta
-from threading import Thread
 
 import schema
 
-from cryton.lib import (
-    step,
-    stage,
-    constants as co,
-    states as st,
-    exceptions,
-    scheduler_client,
-    logger
-)
+from cryton.lib.util import constants as co, exceptions, logger, scheduler_client, states as st
+from cryton.lib.models import stage, step
+from django.utils import timezone
 
 
 class TriggerDelta:
@@ -58,10 +51,11 @@ class TriggerDelta:
             )
 
         schedule_time = self.__create_schedule_time()
-        self.stage_execution_obj.aps_job_id = scheduler_client.schedule_function(
-            "cryton.lib.stage:execution", [self.stage_execution_id], schedule_time)
         self.stage_execution_obj.schedule_time = schedule_time
         self.stage_execution_obj.pause_time = None
+        self.stage_execution_obj.state = st.SCHEDULED
+        self.stage_execution_obj.aps_job_id = scheduler_client.schedule_function(
+            "cryton.lib.models.stage:execution", [self.stage_execution_id], schedule_time)
 
         logger.logger.info("stagexecution scheduled", stage_execution_id=self.stage_execution_id,
                            stage_name=self.stage_execution_obj.model.stage_model.name, status='success')
@@ -80,6 +74,7 @@ class TriggerDelta:
 
         scheduler_client.remove_job(self.stage_execution_obj.aps_job_id)
         self.stage_execution_obj.aps_job_id, self.stage_execution_obj.schedule_time = None, None
+        self.stage_execution_obj.state = st.PENDING
 
         logger.logger.info("stagexecution unscheduled", stage_execution_id=self.stage_execution_id,
                            stage_name=self.stage_execution_obj.model.stage_model.name, status='success')
@@ -93,7 +88,7 @@ class TriggerDelta:
         """
         if self.stage_execution_obj.state in st.STAGE_UNSCHEDULE_STATES:
             self.unschedule()
-            self.stage_execution_obj.pause_time = datetime.utcnow()
+            self.stage_execution_obj.pause_time = timezone.now()
 
         # If stage is RUNNING, set PAUSING state. It will be PAUSED once the currently
         # RUNNING step finished and listener gets it's return value
@@ -113,10 +108,10 @@ class TriggerDelta:
 
         if self.stage_execution_obj.all_steps_finished:
             self.stage_execution_obj.state = st.FINISHED
-            self.stage_execution_obj.finish_time = datetime.utcnow()
+            self.stage_execution_obj.finish_time = timezone.now()
 
             # start WAITING stages
-            self.execute_subjects_to_dependency()
+            self.stage_execution_obj.execute_subjects_to_dependency()
             return
 
         for step_exec in self.stage_execution_obj.model.step_executions.filter(state=st.PAUSED):
@@ -140,22 +135,6 @@ class TriggerDelta:
         else:
             additional_time = delta
 
-        schedule_time = datetime.utcnow() + additional_time
+        schedule_time = timezone.now() + additional_time
 
         return schedule_time
-
-    def execute_subjects_to_dependency(self) -> None:
-        """
-        Execute WAITING StageExecution subjects to specified StageExecution dependency.
-        :return: None
-        """
-        subject_to_ids = self.stage_execution_obj.model.stage_model.subjects_to.all().values_list('stage_model_id',
-                                                                                                  flat=True)
-        subject_to_exs = stage.StageExecution.filter(stage_model_id__in=subject_to_ids,
-                                                     plan_execution_id=self.stage_execution_obj.model.plan_execution_id,
-                                                     state=st.WAITING)
-        for subject_to_ex in subject_to_exs:
-            subject_to_ex_obj = stage.StageExecution(stage_execution_id=subject_to_ex.id)
-            Thread(target=subject_to_ex_obj.execute).run()
-
-        return None
