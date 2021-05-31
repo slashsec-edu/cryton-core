@@ -1,0 +1,74 @@
+id: 4
+plan_id: 3
+plan_name: Output sharing example
+state: FINISHED
+schedule_time: null
+start_time: '2021-05-18T20:22:42.181439'
+pause_time: null
+finish_time: '2021-05-18T20:22:49.038431'
+plan_executions:
+- id: 4
+  stage_name: Output sharing example
+  state: FINISHED
+  schedule_time: null
+  start_time: '2021-05-18T20:22:42.195728'
+  finish_time: '2021-05-18T20:22:49.017064'
+  pause_time: null
+  worker_id: 1
+  worker_name: name
+  evidence_dir: /root/.cryton/evidence/plan_003-output_sharing_example/run_4/worker_name
+  stage_executions:
+  - id: 4
+    stage_name: stage-one
+    state: FINISHED
+    start_time: '2021-05-18T20:22:47.334297'
+    pause_time: null
+    finish_time: '2021-05-18T20:22:48.997266'
+    schedule_time: '2021-05-18T20:22:47.267715'
+    step_executions:
+    - id: 9
+      step_name: bruteforce
+      state: FINISHED
+      start_time: '2021-05-18T20:22:47.389275'
+      finish_time: '2021-05-18T20:22:47.613738'
+      std_err: No error
+      std_out: null
+      mod_err: ''
+      mod_out:
+        password: vagrant
+        username: vagrant
+      evidence_file: No evidence
+      result: OK
+      valid: false
+    - id: 10
+      step_name: ssh-session
+      state: FINISHED
+      start_time: '2021-05-18T20:22:47.756238'
+      finish_time: '2021-05-18T20:22:48.940475'
+      std_err: No error
+      std_out: null
+      mod_err: null
+      mod_out: 'RHOSTS => 127.0.0.1
+
+        PASSWORD => vagrant
+
+        USERNAME => vagrant
+
+        [*] Auxiliary module running as background job 1.
+
+        [*] 127.0.0.1:22 - Starting bruteforce
+
+        [+] 127.0.0.1:22 - Success: ''vagrant:vagrant'' ''uid=1000(vagrant) gid=1000(vagrant)
+        groups=1000(vagrant),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev),109(netdev),119(bluetooth),122(kali-trusted),133(scanner),142(kaboxer),143(docker)
+        Linux kali 5.10.0-kali7-amd64 #1 SMP Debian 5.10.28-1kali1 (2021-04-12) x86_64
+        GNU/Linux ''
+
+        [*] Command shell session 2 opened (127.0.0.1:40195 -> 127.0.0.1:22) at 2021-05-18
+        22:22:48 +0200
+
+        [*] Scanned 1 of 1 hosts (100% complete)
+
+        '
+      evidence_file: No evidence
+      result: OK
+      valid: false

@@ -63,8 +63,6 @@ unittests:
       - .cache/pip
       - venv
   script:
-    - sed -i.bak s/DOCKER\ =\ False/DOCKER\ =\ True/g cryton/settings.py
-    - sed -i.bak s/"dev\/log"/"var\/log\/dpkg.log"/g cryton/etc/logging_config.yaml
     - pytest --cov=cryton tests/unit_tests/ --cov-config=.coveragerc-unit
   coverage: '/TOTAL.*\s+(\d+%)$/'
 
@@ -75,8 +73,6 @@ integrationtests:
       - .cache/pip
       - venv
   script:
-    - sed -i.bak s/DOCKER\ =\ False/DOCKER\ =\ True/g cryton/settings.py
-    - sed -i.bak s/"dev\/log"/"var\/log\/dpkg.log"/g cryton/etc/logging_config.yaml
     - pytest --cov=cryton tests/integration_tests/ --cov-config=.coveragerc-integration
   coverage: '/TOTAL.*\s+(\d+%)$/'
 

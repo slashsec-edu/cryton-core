@@ -1,12 +1,8 @@
 from django.test import TestCase
 from mock import patch, MagicMock, Mock
-from cryton.lib import (
-    step,
-    exceptions,
-    logger,
-    constants,
-    states, util
-)
+
+from cryton.lib.util import constants, exceptions, logger, states
+from cryton.lib.models import step
 
 from cryton.cryton_rest_api.models import (
     PlanModel,
@@ -21,13 +17,13 @@ from cryton.cryton_rest_api.models import (
 
 import yaml
 import os
-import datetime
+from django.utils import timezone
 from model_bakery import baker
 
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
 class TestStepBasic(TestCase):
 
     def setUp(self) -> None:
@@ -116,19 +112,6 @@ class TestStepBasic(TestCase):
         self.step_obj.attack_module_args = {'test': 1}
         self.assertEqual(self.step_obj.attack_module_args, {'test': 1})
 
-    def test_properties_create_named_sesion(self):
-        self.step_obj.create_named_session = 'test-sess'
-        self.assertEqual(self.step_obj.create_named_session, 'test-sess')
-
-    def test_properties_use_named_session(self):
-        self.step_obj.use_named_session = 'test-sess'
-        self.assertEqual(self.step_obj.use_named_session, 'test-sess')
-
-    def test_properties_use_any_session_to_target(self):
-        self.step_obj.use_any_session_to_target = 'target'
-        self.assertEqual(self.step_obj.use_any_session_to_target, 'target')
-        self.assertIsInstance(self.step_obj.execution_stats_list, step.QuerySet)
-
     def test_properties_successors(self):
         step_args = {'stage_model_id': self.stage_model.id,
                      'attack_module': 'attack_module',
@@ -209,64 +192,58 @@ class TestStepBasic(TestCase):
         self.assertEqual(step_obj.model.stage_model.id, self.stage_model.id)
 
     @patch('uuid.uuid4')
-    @patch('cryton.lib.util.rabbit_connection', MagicMock)
+    @patch('cryton.lib.util.util.Rpc', MagicMock)
     def test_validate_modules(self, mock_uuid):
         mock_uuid.return_value.hex = 'random_string'
         step_execution_model = baker.make(StepExecutionModel, **{'state': 'RUNNING'})
         step_execution = step.StepExecution(step_execution_id=step_execution_model.id)
-        step_execution.validate_module()
-        corr_obj = CorrelationEvent.objects.get(correlation_id='random_string')
-        self.assertIsNotNone(corr_obj)
+        resp = step_execution.validate_module()
+        self.assertFalse(resp)
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
 class TestStepAdvanced(TestCase):
 
     def setUp(self) -> None:
         self.stage_model = baker.make(StageModel)
 
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        self.step_obj = step.Step(**step_yaml)
+        self.f_in = open('{}/step.yaml'.format(TESTS_DIR))
+        self.step_yaml = yaml.safe_load(self.f_in)
+        self.f_in.seek(0)
+        self.step_yaml.update({'stage_model_id': self.stage_model.id})
+        self.step_obj = step.Step(**self.step_yaml)
+
+        self.step_yaml_succ = yaml.safe_load(self.f_in)
+        self.step_yaml_succ.update({'stage_model_id': self.stage_model.id})
+        self.step_successor = step.Step(**self.step_yaml_succ)
+
+        self.step_succ_1 = step.Step(**self.step_yaml)
+        self.step_succ_2 = step.Step(**self.step_yaml)
+        self.step_succ_3 = step.Step(**self.step_yaml)
 
     def test_add_successor(self):
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        step_successor = step.Step(**step_yaml)
-        self.assertIsInstance(self.step_obj.add_successor(step_successor.model.id,
+        self.assertIsInstance(self.step_obj.add_successor(self.step_successor.model.id,
                                                           'result', 'OK'), int)
 
         with self.assertRaises(exceptions.InvalidSuccessorType):
-            self.assertIsInstance(self.step_obj.add_successor(step_successor.model.id,
+            self.assertIsInstance(self.step_obj.add_successor(self.step_successor.model.id,
                                                               'bad type', 'OK'), int)
 
         with self.assertRaises(exceptions.InvalidSuccessorValue):
-            self.assertIsInstance(self.step_obj.add_successor(step_successor.model.id,
+            self.assertIsInstance(self.step_obj.add_successor(self.step_successor.model.id,
                                                               'result', 'bad value'), int)
 
     def test_parents(self):
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        step_successor = step.Step(**step_yaml)
-        self.step_obj.add_successor(step_successor.model.id, 'result', 'OK')
-        self.assertEqual([self.step_obj.model], list(step_successor.parents))
+        self.step_obj.add_successor(self.step_successor.model.id, 'result', 'OK')
+        self.assertEqual([self.step_obj.model], list(self.step_successor.parents))
 
     def test_successors(self):
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        step_parent = step.Step(**step_yaml)
+        step_parent = step.Step(**self.step_yaml)
         step_parent.add_successor(self.step_obj.model.id, 'result', 'OK')
         self.assertEqual([self.step_obj.model], list(step_parent.successors))
 
     def test_get_successors(self):
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        step_parent = step.Step(**step_yaml)
+        step_parent = step.Step(**self.step_yaml)
         step_parent.add_successor(self.step_obj.model.id, 'result', 'OK')
         stage_exec_obj = baker.make(StageExecutionModel)
         step_ex_obj = step.StepExecution(step_model_id=step_parent.model.id, stage_execution_id=stage_exec_obj.id)
@@ -279,10 +256,7 @@ class TestStepAdvanced(TestCase):
         self.assertEqual(len(successors), 0)
 
     def test_get_regex_successors(self):
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        step_parent = step.Step(**step_yaml)
+        step_parent = step.Step(**self.step_yaml)
         step_parent.add_successor(self.step_obj.model.id, 'std_out', 'r"test"')
         stage_exec_obj = baker.make(StageExecutionModel)
         step_ex_obj = step.StepExecution(step_model_id=step_parent.model.id, stage_execution_id=stage_exec_obj.id)
@@ -296,10 +270,7 @@ class TestStepAdvanced(TestCase):
         self.assertEqual(len(successors), 0)
 
     def test_ignore(self):
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        step_parent = step.Step(**step_yaml)
+        step_parent = step.Step(**self.step_yaml)
         step_parent.add_successor(self.step_obj.model.id, 'std_out', 'r"test"')
         stage_exec_obj = baker.make(StageExecutionModel)
         step_ex_obj_succ = step.StepExecution(step_model_id=self.step_obj.model.id,
@@ -313,25 +284,19 @@ class TestStepAdvanced(TestCase):
         self.assertEqual(step_ex_obj_succ.state, states.IGNORE)
 
     def test_ignore_adv(self):
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        step_succ_1 = step.Step(**step_yaml)
-        step_succ_2 = step.Step(**step_yaml)
-        step_succ_3 = step.Step(**step_yaml)
-        self.step_obj.add_successor(step_succ_1.model.id, 'std_out', 'r"test"')
-        self.step_obj.add_successor(step_succ_2.model.id, 'result', constants.RESULT_OK)
-        step_succ_1.add_successor(step_succ_3.model.id, 'result', constants.RESULT_OK)
-        step_succ_2.add_successor(step_succ_3.model.id, 'result', constants.RESULT_OK)
+        self.step_obj.add_successor(self.step_succ_1.model.id, 'std_out', 'r"test"')
+        self.step_obj.add_successor(self.step_succ_2.model.id, 'result', constants.RESULT_OK)
+        self.step_succ_1.add_successor(self.step_succ_3.model.id, 'result', constants.RESULT_OK)
+        self.step_succ_2.add_successor(self.step_succ_3.model.id, 'result', constants.RESULT_OK)
         stage_exec_obj = baker.make(StageExecutionModel)
 
         step_ex_obj_par = step.StepExecution(step_model_id=self.step_obj.model.id,
                                              stage_execution_id=stage_exec_obj.id)
-        step_ex_obj_succ_1 = step.StepExecution(step_model_id=step_succ_1.model.id,
+        step_ex_obj_succ_1 = step.StepExecution(step_model_id=self.step_succ_1.model.id,
                                                 stage_execution_id=stage_exec_obj.id)
-        step_ex_obj_succ_2 = step.StepExecution(step_model_id=step_succ_2.model.id,
+        step_ex_obj_succ_2 = step.StepExecution(step_model_id=self.step_succ_2.model.id,
                                                 stage_execution_id=stage_exec_obj.id)
-        step_ex_obj_succ_3 = step.StepExecution(step_model_id=step_succ_3.model.id,
+        step_ex_obj_succ_3 = step.StepExecution(step_model_id=self.step_succ_3.model.id,
                                                 stage_execution_id=stage_exec_obj.id)
 
         step_ex_obj_par.std_out = "test"
@@ -349,25 +314,19 @@ class TestStepAdvanced(TestCase):
         self.assertNotEqual(step_ex_obj_succ_3.state, states.IGNORE)
 
     def test_ignore_successors(self):
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        step_succ_1 = step.Step(**step_yaml)
-        step_succ_2 = step.Step(**step_yaml)
-        step_succ_3 = step.Step(**step_yaml)
-        self.step_obj.add_successor(step_succ_1.model.id, 'std_out', 'r"test"')
-        self.step_obj.add_successor(step_succ_2.model.id, 'result', constants.RESULT_OK)
-        step_succ_1.add_successor(step_succ_3.model.id, 'result', constants.RESULT_OK)
-        step_succ_2.add_successor(step_succ_3.model.id, 'result', constants.RESULT_OK)
+        self.step_obj.add_successor(self.step_succ_1.model.id, 'std_out', 'r"test"')
+        self.step_obj.add_successor(self.step_succ_2.model.id, 'result', constants.RESULT_OK)
+        self.step_succ_1.add_successor(self.step_succ_3.model.id, 'result', constants.RESULT_OK)
+        self.step_succ_2.add_successor(self.step_succ_3.model.id, 'result', constants.RESULT_OK)
         stage_exec_obj = baker.make(StageExecutionModel)
 
         step_ex_obj_par = step.StepExecution(step_model_id=self.step_obj.model.id,
                                              stage_execution_id=stage_exec_obj.id)
-        step_ex_obj_succ_1 = step.StepExecution(step_model_id=step_succ_1.model.id,
+        step_ex_obj_succ_1 = step.StepExecution(step_model_id=self.step_succ_1.model.id,
                                                 stage_execution_id=stage_exec_obj.id)
-        step_ex_obj_succ_2 = step.StepExecution(step_model_id=step_succ_2.model.id,
+        step_ex_obj_succ_2 = step.StepExecution(step_model_id=self.step_succ_2.model.id,
                                                 stage_execution_id=stage_exec_obj.id)
-        step_ex_obj_succ_3 = step.StepExecution(step_model_id=step_succ_3.model.id,
+        step_ex_obj_succ_3 = step.StepExecution(step_model_id=self.step_succ_3.model.id,
                                                 stage_execution_id=stage_exec_obj.id)
 
         step_ex_obj_par.std_out = "nope"
@@ -380,27 +339,21 @@ class TestStepAdvanced(TestCase):
         self.assertEqual(step_ex_obj_succ_2.state, states.IGNORE)
         self.assertEqual(step_ex_obj_succ_3.state, states.IGNORE)
 
-    @patch('cryton.lib.step.StepExecution.execute')
+    @patch('cryton.lib.models.step.StepExecution.execute')
     def test_execute_successors(self, mock_execute):
-        f_in = open('{}/step.yaml'.format(TESTS_DIR))
-        step_yaml = yaml.safe_load(f_in)
-        step_yaml.update({'stage_model_id': self.stage_model.id})
-        step_succ_1 = step.Step(**step_yaml)
-        step_succ_2 = step.Step(**step_yaml)
-        step_succ_3 = step.Step(**step_yaml)
-        self.step_obj.add_successor(step_succ_1.model.id, 'std_out', 'r"test"')
-        self.step_obj.add_successor(step_succ_2.model.id, 'result', constants.RESULT_OK)
-        step_succ_1.add_successor(step_succ_3.model.id, 'result', constants.RESULT_OK)
-        step_succ_2.add_successor(step_succ_3.model.id, 'result', constants.RESULT_OK)
+        self.step_obj.add_successor(self.step_succ_1.model.id, 'std_out', 'r"test"')
+        self.step_obj.add_successor(self.step_succ_2.model.id, 'result', constants.RESULT_OK)
+        self.step_succ_1.add_successor(self.step_succ_3.model.id, 'result', constants.RESULT_OK)
+        self.step_succ_2.add_successor(self.step_succ_3.model.id, 'result', constants.RESULT_OK)
         stage_exec_obj = baker.make(StageExecutionModel)
 
         step_ex_obj_par = step.StepExecution(step_model_id=self.step_obj.model.id,
                                              stage_execution_id=stage_exec_obj.id)
-        step_ex_obj_succ_1 = step.StepExecution(step_model_id=step_succ_1.model.id,
+        step_ex_obj_succ_1 = step.StepExecution(step_model_id=self.step_succ_1.model.id,
                                                 stage_execution_id=stage_exec_obj.id)
-        step_ex_obj_succ_2 = step.StepExecution(step_model_id=step_succ_2.model.id,
+        step_ex_obj_succ_2 = step.StepExecution(step_model_id=self.step_succ_2.model.id,
                                                 stage_execution_id=stage_exec_obj.id)
-        step_ex_obj_succ_3 = step.StepExecution(step_model_id=step_succ_3.model.id,
+        step_ex_obj_succ_3 = step.StepExecution(step_model_id=self.step_succ_3.model.id,
                                                 stage_execution_id=stage_exec_obj.id)
 
         step_ex_obj_par.std_out = "test"
@@ -416,9 +369,9 @@ class TestStepAdvanced(TestCase):
         self.assertEqual(step_ex_obj_succ_3.state, states.PENDING)
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
-@patch('cryton.lib.states.StepStateMachine.validate_transition', MagicMock())
-@patch('cryton.lib.states.StepStateMachine.validate_state', MagicMock())
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.states.StepStateMachine.validate_transition', MagicMock())
+@patch('cryton.lib.util.states.StepStateMachine.validate_state', MagicMock())
 class TestStepExecution(TestCase):
 
     def setUp(self) -> None:
@@ -432,6 +385,20 @@ class TestStepExecution(TestCase):
         }
 
         self.step_exec_stats_obj = step.StepExecution(**step_exec_stats)
+
+        self.step_args = {'stage_model_id': self.stage_model.id,
+                          'attack_module': 'attack_module',
+                          'is_init': True,
+                          'name': 'test_step_1',
+                          'executor': 'executor',
+                          'attack_module_args': {}}
+
+        self.succ_step_args = {'stage_model_id': self.stage_model.id,
+                               'attack_module': 'attack_module',
+                               'is_init': True,
+                               'name': 'test_step_2',
+                               'executor': 'executor',
+                               'attack_module_args': {}}
 
     def test_init_delete(self):
         step_ex_args = {'step_model_id': self.step_obj.id,
@@ -474,12 +441,12 @@ class TestStepExecution(TestCase):
         self.assertEqual(self.step_exec_stats_obj.evidence_file, 'ev_f')
 
     def test_properties_start_time(self):
-        cur_time = datetime.datetime.now()
+        cur_time = timezone.now()
         self.step_exec_stats_obj.start_time = cur_time
         self.assertEqual(self.step_exec_stats_obj.start_time, cur_time)
 
     def test_properties_finish_time(self):
-        cur_time = datetime.datetime.now()
+        cur_time = timezone.now()
         self.step_exec_stats_obj.finish_time = cur_time
         self.assertEqual(self.step_exec_stats_obj.finish_time, cur_time)
 
@@ -522,20 +489,8 @@ class TestStepExecution(TestCase):
         pass
 
     def test_get_successors(self):
-        step_args = {'stage_model_id': self.stage_model.id,
-                     'attack_module': 'attack_module',
-                     'is_init': True,
-                     'name': 'test_step_1',
-                     'executor': 'executor',
-                     'attack_module_args': {}}
-        succ_step_args = {'stage_model_id': self.stage_model.id,
-                          'attack_module': 'attack_module',
-                          'is_init': True,
-                          'name': 'test_step_2',
-                          'executor': 'executor',
-                          'attack_module_args': {}}
-        step_obj = step.Step(**step_args)
-        succ_step_obj = step.Step(**succ_step_args)
+        step_obj = step.Step(**self.step_args)
+        succ_step_obj = step.Step(**self.succ_step_args)
         step_obj.add_successor(succ_step_obj.model.id, successor_type='result', successor_value='OK')
 
         step_exec_stats = {
@@ -550,20 +505,8 @@ class TestStepExecution(TestCase):
         self.assertEqual(step_exec_stats_obj.get_successors()[0].id, succ_step_obj.model.id)
 
     def test_get_successors_regex(self):
-        step_args = {'stage_model_id': self.stage_model.id,
-                     'attack_module': 'attack_module',
-                     'is_init': True,
-                     'name': 'test_step_1',
-                     'executor': 'executor',
-                     'attack_module_args': {}}
-        succ_step_args = {'stage_model_id': self.stage_model.id,
-                          'attack_module': 'attack_module',
-                          'is_init': True,
-                          'name': 'test_step_2',
-                          'executor': 'executor',
-                          'attack_module_args': {}}
-        step_obj = step.Step(**step_args)
-        succ_step_obj = step.Step(**succ_step_args)
+        step_obj = step.Step(**self.step_args)
+        succ_step_obj = step.Step(**self.succ_step_args)
         step_obj.add_successor(succ_step_obj.model.id, successor_type='std_out', successor_value="r'(teststring*)'")
 
         step_exec_stats = {
@@ -582,19 +525,19 @@ class TestStepExecution(TestCase):
         self.assertEqual(len(step_exec_stats_obj.get_successors()), 0)
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
-@patch('cryton.lib.states.StepStateMachine.validate_transition', MagicMock())
-@patch('cryton.lib.states.StepStateMachine.validate_state', MagicMock())
-@patch('cryton.lib.session.set_msf_session_id', MagicMock())
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.states.StepStateMachine.validate_transition', MagicMock())
+@patch('cryton.lib.util.states.StepStateMachine.validate_state', MagicMock())
+@patch('cryton.lib.models.session.set_msf_session_id', MagicMock())
 @patch('time.sleep', MagicMock())
 class TestStepExecute(TestCase):
 
     def setUp(self) -> None:
-        self.mock_execute_attack_module = patch('cryton.lib.step.util.execute_attack_module').start()
-        self.mock_evidence_file = patch('cryton.lib.util.store_evidence_file').start()
-        self.mock_get_msf_session = patch('cryton.lib.session.get_msf_session_id').start()
-        self.mock_get_session_ids = patch('cryton.lib.session.get_session_ids').start()
-        self.mock_step_init = patch('cryton.lib.step.Step')
+        self.mock_execute_attack_module = patch('cryton.lib.models.step.util.execute_attack_module').start()
+        self.mock_evidence_file = patch('cryton.lib.util.util.store_evidence_file').start()
+        self.mock_get_msf_session = patch('cryton.lib.models.session.get_msf_session_id').start()
+        self.mock_get_session_ids = patch('cryton.lib.models.session.get_session_ids').start()
+        self.mock_step_init = patch('cryton.lib.models.step.Step')
         self.mock_step_init.start()
 
         self.mock_execute_attack_module.return_value = {constants.RETURN_CODE: 0, constants.STD_OUT: 'test'}
@@ -602,7 +545,7 @@ class TestStepExecute(TestCase):
         self.stage_model = baker.make(StageModel)
         self.stage_execution = baker.make(StageExecutionModel)
 
-        self.step_model_obj = baker.make(StepModel, **{'create_named_session': None})
+        self.step_model_obj = baker.make(StepModel)
         step_exec_stats = {
             'step_model_id': self.step_model_obj.id,
             'stage_execution': self.stage_execution
@@ -627,7 +570,7 @@ class TestStepExecute(TestCase):
         # self.assertEqual(self.step_exec_stats_obj.model.result, 'OK')
         self.assertIn("stepexecution executed", cm.output[0])
 
-    @patch('cryton.lib.util.execute_attack_module', MagicMock(side_effect=exceptions.RabbitConnectionError('test')))
+    @patch('cryton.lib.util.util.execute_attack_module', MagicMock(side_effect=exceptions.RabbitConnectionError('test')))
     def test_execute_no_connection(self):
         rabbit_channel = MagicMock()
         self.mock_step_init.return_value = step.Step(step_model_id=self.step_model_obj.id)
@@ -635,24 +578,27 @@ class TestStepExecute(TestCase):
             _ = self.step_exec_stats_obj.execute(rabbit_channel)
 
     def test_execute_named_session(self):
+        self.mock_step_init.stop()
         rabbit_channel = MagicMock()
-        self.step_model_obj.use_named_session = 'test-session'
+        self.step_model_obj.attack_module_args = {constants.USE_NAMED_SESSION: 'test-session'}
         self.step_model_obj.save()
         with self.assertLogs('cryton-debug', level='INFO'):
             self.step_exec_stats_obj.execute(rabbit_channel)
 
     def test_execute_any_session(self):
+        self.mock_step_init.stop()
         rabbit_channel = MagicMock()
-        self.step_model_obj.use_named_session = None
-        self.step_model_obj.use_any_session_to_target = 'target'
+        self.step_model_obj.attack_module_args = {constants.USE_ANY_SESSION_TO_TARGET: 'target'}
         self.step_model_obj.save()
+        self.mock_get_session_ids.return_value = [1]
         with self.assertLogs('cryton-debug', level='INFO'):
             self.step_exec_stats_obj.execute(rabbit_channel)
 
     def test_execute_create_named_session(self):
+        self.mock_step_init.stop()
         rabbit_channel = MagicMock()
         step_obj = step.Step(step_model_id=self.step_model_obj.id)
-        step_obj.create_named_session = 'named_session'
+        step_obj.attack_module_args.update({constants.CREATE_NAMED_SESSION: 'named_session'})
         self.mock_step_init.return_value = step_obj
 
         self.mock_execute_attack_module.return_value.update({constants.RET_SESSION_ID: 1,
@@ -668,26 +614,25 @@ class TestStepExecute(TestCase):
         rabbit_channel = MagicMock()
         self.mock_evidence_file.return_value = 'file_path'
         self.mock_execute_attack_module.return_value = {constants.RET_FILE: {constants.RET_FILE_NAME: 'name',
-                                                                             constants.RET_FILE_CONTENTS: 'contents'}}
+                                                                             constants.RET_FILE_CONTENT: 'contents'}}
         with self.assertLogs('cryton-debug', level='INFO'):
             self.step_exec_stats_obj.execute(rabbit_channel)
 
     def test_execute_use_named_session(self):
+        self.mock_step_init.stop()
         rabbit_channel = MagicMock()
         mock_step_obj = step.Step(step_model_id=self.step_model_obj.id)
-        mock_step_obj.use_named_session = 'test-session'
-        self.mock_step_init.return_value = mock_step_obj
+        mock_step_obj.attack_module_args = {constants.USE_NAMED_SESSION: 'test-session'}
         self.mock_get_msf_session.return_value = None
 
         with self.assertLogs('cryton-debug', level='ERROR'), self.assertRaises(exceptions.SessionIsNotOpen):
             self.step_exec_stats_obj.execute(rabbit_channel)
 
     def test_execute_no_session_to_target(self):
+        self.mock_step_init.stop()
         rabbit_channel = MagicMock()
         mock_step_obj = step.Step(step_model_id=self.step_model_obj.id)
-        mock_step_obj.use_any_session_to_target = 'target'
-        mock_step_obj.use_named_session = None
-        self.mock_step_init.return_value = mock_step_obj
+        mock_step_obj.attack_module_args = {constants.USE_ANY_SESSION_TO_TARGET: 'target'}
 
         self.mock_get_session_ids.return_value = [None]
 
@@ -704,7 +649,7 @@ class TestStepExecute(TestCase):
         with self.assertLogs('cryton-debug', level='INFO'):
             self.step_exec_stats_obj.execute(rabbit_channel)
 
-    @patch('cryton.lib.step.util.fill_template')
+    @patch('cryton.lib.models.step.util.fill_template')
     def test_execute_fill_mod_args(self, mock_fill_template):
         rabbit_channel = MagicMock()
         mock_fill_template.return_value = '{"test": "test"}'
@@ -718,7 +663,7 @@ class TestStepExecute(TestCase):
         step_ex_obj.execute(rabbit_channel)
         mock_fill_template.assert_called_once()
 
-    # @patch('cryton.lib.step.util.execute_attack_module')
+    # @patch('cryton.lib.models.step.util.execute_attack_module')
     # def test_execute_fail(self, mock_execute_attack_module):
     #     mock_execute_attack_module.return_value = {'return_code': -1}
     #     with self.assertLogs('cryton-debug', level='INFO') as cm:
@@ -727,7 +672,7 @@ class TestStepExecute(TestCase):
     #     self.assertEqual(self.step_exec_stats_obj.model.result, 'FAIL')
     #     self.assertIn("stepexecution executed", cm.output[0])
 
-    # @patch('cryton.lib.step.util.execute_attack_module')
+    # @patch('cryton.lib.models.step.util.execute_attack_module')
     # def test_execute_output_values(self, mock_execute_attack_module):
     #     mock_execute_attack_module.return_value = {'return_code': 0,
     #                                                'std_out': 'test-out',
@@ -744,7 +689,7 @@ class TestStepExecute(TestCase):
     #     self.assertEqual(self.step_exec_stats_obj.model.mod_err, 'some-error')
     #     self.assertEqual(self.step_exec_stats_obj.model.evidence_file, '/file/path')
     #
-    # @patch('cryton.lib.step.util.execute_attack_module')
+    # @patch('cryton.lib.models.step.util.execute_attack_module')
     # def test_execute_output(self, mock_execute_attack_module):
     #     mock_execute_attack_module.return_value = {'return_code': 0,
     #                                                constants.RET_SESSION_ID: '42'}
@@ -784,7 +729,8 @@ class TestStepExecute(TestCase):
         self.assertIsInstance(report_dict, dict)
         self.assertEqual(report_dict.get('evidence_file'), 'test_evidence_file')
 
-    def test_mod_out_sharing_custom(self):
+    @patch('cryton.lib.models.step.util.execute_attack_module')
+    def test_mod_out_sharing_custom(self, mock_exec):
         rabbit_channel = MagicMock()
         self.mock_step_init.stop()
 
@@ -817,17 +763,16 @@ class TestStepExecute(TestCase):
 
         step_exec.execute(rabbit_channel)
 
-        step_arguments = {constants.ARGUMENTS: expected_result}
-
-        util.execute_attack_module.assert_called_with(
+        mock_exec.assert_called_with(
             rabbit_channel=rabbit_channel,
             attack_module=step_obj.attack_module,
-            attack_module_arguments=step_arguments,
+            attack_module_arguments=expected_result,
             worker_model=self.stage_execution.plan_execution.worker,
-            event_identification_value=step_exec.model.id,
+            step_execution_id=step_exec.model.id,
             executor=step_obj.model.executor)
 
-    def test_mod_out_sharing_parent_and_custom(self):
+    @patch('cryton.lib.models.step.util.execute_attack_module')
+    def test_mod_out_sharing_parent_and_custom(self, mock_exec):
         rabbit_channel = MagicMock()
         self.mock_step_init.stop()
 
@@ -861,24 +806,24 @@ class TestStepExecute(TestCase):
 
         step_exec.execute(rabbit_channel)
 
-        step_arguments = {constants.ARGUMENTS: expected_result}
-
-        util.execute_attack_module.assert_called_with(
+        mock_exec.assert_called_with(
             rabbit_channel=rabbit_channel,
             attack_module=step_obj.attack_module,
-            attack_module_arguments=step_arguments,
+            attack_module_arguments=expected_result,
             worker_model=self.stage_execution.plan_execution.worker,
-            event_identification_value=step_exec.model.id,
+            step_execution_id=step_exec.model.id,
             executor=step_obj.model.executor)
 
-    @patch('json.loads')
-    @patch('cryton.lib.worker.WorkerRpc', Mock())
-    def test_kill(self, mock_loads):
-        mock_loads.return_value = {"event_v": {"return_code": 0}}
+    @patch('cryton.lib.util.util.Rpc.__enter__')
+    def test_kill(self, mock_rpc):
+        mock_call = Mock()
+        mock_call.call = Mock(return_value={'event_v': {'return_code': 0}})
+        mock_rpc.return_value = mock_call
+
 
         step_ex_model = baker.make(StepExecutionModel, **{'state': 'RUNNING'})
         step_ex = step.StepExecution(step_execution_id=step_ex_model.id)
-        baker.make(CorrelationEvent, event_identification_value=step_ex_model.id)
+        baker.make(CorrelationEvent, step_execution_id=step_ex_model.id)
 
         with self.assertLogs('cryton-debug', level='INFO'):
             ret = step_ex.kill()

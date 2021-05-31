@@ -1,6 +1,6 @@
 from enum import Enum, EnumMeta
 
-from cryton.lib.exceptions import TriggerTypeDoesNotExist
+from cryton.lib.util.exceptions import TriggerTypeDoesNotExist
 from cryton.lib.triggers import (
     trigger_delta,
     trigger_http_listener

@@ -1,0 +1,154 @@
+# This report is generated from running execution-variables-example on 2 workers in 1 run
+id: 2
+plan_id: 1
+plan_name: Execution variables example
+state: FINISHED
+schedule_time: null
+start_time: '2021-05-07T16:57:19.952688Z'
+pause_time: null
+finish_time: '2021-05-07T16:57:28.652802Z'
+plan_executions:
+- id: 3
+  stage_name: Execution variables example
+  state: FINISHED
+  schedule_time: null
+  start_time: '2021-05-07T16:57:19.961347Z'
+  finish_time: '2021-05-07T16:57:27.020734Z'
+  pause_time: null
+  worker_id: 1
+  worker_name: name
+  evidence_dir: /root/.cryton/evidence/plan_001-Execution_variables_example/run_2/worker_name
+  stage_executions:
+  - id: 3
+    stage_name: stage-one
+    state: FINISHED
+    start_time: '2021-05-07T16:57:25.144658Z'
+    pause_time: null
+    finish_time: '2021-05-07T16:57:26.948803Z'
+    schedule_time: '2021-05-07T16:57:25.024140Z'
+    step_executions:
+    - id: 5
+      step_name: scan-localhost
+      state: FINISHED
+      start_time: '2021-05-07T16:57:25.241824Z'
+      finish_time: '2021-05-07T16:57:26.429294Z'
+      std_err: No error
+      std_out: null
+      mod_err: null
+      mod_out:
+        127.0.0.1:
+          ports:
+          - cpe:
+            - cpe: cpe:/o:linux:linux_kernel
+            state: open
+            portid: '22'
+            reason: syn-ack
+            scripts: []
+            service:
+              conf: '10'
+              name: ssh
+              method: probed
+              ostype: Linux
+              product: OpenSSH
+              version: 8.4p1 Debian 5
+              extrainfo: protocol 2.0
+            protocol: tcp
+            reason_ttl: '0'
+          state:
+            state: up
+            reason: conn-refused
+            reason_ttl: '0'
+          osmatch: {}
+          hostname:
+          - name: localhost
+            type: PTR
+          macaddress: null
+      evidence_file: No evidence
+      result: OK
+      valid: false
+    - id: 6
+      step_name: bruteforce
+      state: FINISHED
+      start_time: '2021-05-07T16:57:26.583725Z'
+      finish_time: '2021-05-07T16:57:26.803261Z'
+      std_err: No error
+      std_out: null
+      mod_err: ''
+      mod_out:
+        password: pass
+        username: admin
+      evidence_file: No evidence
+      result: OK
+      valid: false
+- id: 4
+  stage_name: Execution variables example
+  state: FINISHED
+  schedule_time: null
+  start_time: '2021-05-07T16:57:22.186660Z'
+  finish_time: '2021-05-07T16:57:28.629214Z'
+  pause_time: null
+  worker_id: 2
+  worker_name: name
+  evidence_dir: /root/.cryton/evidence/plan_001-Execution_variables_example/run_2/worker_name
+  stage_executions:
+  - id: 4
+    stage_name: stage-one
+    state: FINISHED
+    start_time: '2021-05-07T16:57:27.327513Z'
+    pause_time: null
+    finish_time: '2021-05-07T16:57:28.605678Z'
+    schedule_time: '2021-05-07T16:57:27.261733Z'
+    step_executions:
+    - id: 7
+      step_name: scan-localhost
+      state: FINISHED
+      start_time: '2021-05-07T16:57:27.374479Z'
+      finish_time: '2021-05-07T16:57:28.169433Z'
+      std_err: No error
+      std_out: null
+      mod_err: null
+      mod_out:
+        127.0.0.1:
+          ports:
+          - cpe:
+            - cpe: cpe:/o:linux:linux_kernel
+            state: open
+            portid: '22'
+            reason: syn-ack
+            scripts: []
+            service:
+              conf: '10'
+              name: ssh
+              method: probed
+              ostype: Linux
+              product: OpenSSH
+              version: 8.4p1 Debian 5
+              extrainfo: protocol 2.0
+            protocol: tcp
+            reason_ttl: '0'
+          state:
+            state: up
+            reason: conn-refused
+            reason_ttl: '0'
+          osmatch: {}
+          hostname:
+          - name: localhost
+            type: PTR
+          macaddress: null
+      evidence_file: No evidence
+      result: OK
+      valid: false
+    - id: 8
+      step_name: bruteforce
+      state: FINISHED
+      start_time: '2021-05-07T16:57:28.342445Z'
+      finish_time: '2021-05-07T16:57:28.534823Z'
+      std_err: No error
+      std_out: null
+      mod_err: ''
+      mod_out:
+        password: vagrant
+        username: vagrant
+      evidence_file: No evidence
+      result: OK
+      valid: false

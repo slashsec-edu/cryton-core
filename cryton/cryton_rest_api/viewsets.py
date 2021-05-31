@@ -30,17 +30,9 @@ from cryton.cryton_rest_api.models import (
 from cryton.cryton_rest_api import (
     exceptions
 )
-from cryton.lib import (
-    creator,
-    plan,
-    stage,
-    step,
-    exceptions as core_exceptions,
-    run,
-    util,
-    states,
-    worker
-)
+
+from cryton.lib.util import creator, exceptions as core_exceptions, states, util
+from cryton.lib.models import stage, plan, step, worker, run
 from cryton import settings as cryton_settings
 
 
@@ -738,7 +730,7 @@ class RunViewSet(GeneralViewSet):
         except Exception as ex:
             raise exceptions.ApiInternalError(detail=str(ex))
 
-        return Response({'detail': {'run_model_id': run_model_id, 'report': rep}})
+        return Response(rep, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(operation_description="Pause Run", request_body=serializers.serializers.Serializer(),
                          responses={200: response_detail, 500: response_detail, 400: response_detail})
@@ -953,7 +945,7 @@ class PlanExecutionViewSet(ExecutionViewSet):
         plan_ex_obj = plan.PlanExecution(plan_execution_id=plan_execution_id)
         plan_ex_obj.validate_modules()
 
-        msg = {'detail': '{}'.format("Plan modules are being validated.")}
+        msg = {'detail': '{}'.format("Plan's modules were validated.")}
         return Response(msg, status=status.HTTP_200_OK)
 
     @action(methods=["post"], detail=True)

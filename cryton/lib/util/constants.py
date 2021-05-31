@@ -1,0 +1,87 @@
+# results
+RESULT_OK = 'OK'
+RESULT_FAIL = 'FAIL'
+RESULT_EXCEPTION = 'EXCEPTION'
+RESULT_UNKNOWN = 'UNKNOWN'
+RESULT_TERMINATED = 'TERMINATED'
+
+# return codes
+CODE_OK = 0
+CODE_FAIL = -1
+CODE_EXCEPTION = -2
+CODE_TERMINATED = -3
+
+# types
+RETURN_CODE = 'return_code'
+RETURN_VALUE = 'return_value'
+STATE = 'state'
+RESULT = 'result'
+STD_OUT = 'std_out'
+STD_ERR = 'std_err'
+MOD_OUT = 'mod_out'
+MOD_ERR = 'mod_err'
+ANY = 'any'
+
+# Types with allowed regex
+REGEX_TYPES = [STD_OUT, STD_ERR, MOD_OUT, MOD_ERR]
+
+# Step args
+SESSION_ID = 'session_id'
+ARGUMENTS = 'arguments'
+CREATE_NAMED_SESSION = 'create_named_session'
+USE_NAMED_SESSION = 'use_named_session'
+USE_ANY_SESSION_TO_TARGET = 'use_any_session_to_target'
+
+# Step ret
+RET_SESSION_ID = SESSION_ID
+RET_FILE = 'file'
+RET_FILE_NAME = 'file_name'
+RET_FILE_CONTENT = 'file_content'
+EVIDENCE_FILE = 'evidence_file'
+
+# Stage trigger types
+DELTA = 'delta'
+HTTP_LISTENER = 'HTTPListener'
+
+# Step related
+RET_CODE_ENUM = {
+    CODE_OK: RESULT_OK,
+    CODE_FAIL: RESULT_FAIL,
+    CODE_EXCEPTION: RESULT_EXCEPTION,
+    CODE_TERMINATED: RESULT_TERMINATED
+}
+
+# Successor related
+VALID_SUCCESSOR_TYPES = [STATE, RESULT, ANY, STD_OUT, STD_ERR, MOD_OUT, MOD_ERR]
+VALID_SUCCESSOR_RESULTS = [RESULT_OK, RESULT_FAIL, RESULT_EXCEPTION, RESULT_TERMINATED]
+
+# Queue types
+Q_ATTACK = 'attack'
+Q_CONTROL = 'control'
+
+# Other contants
+PAUSE = 'PAUSE'
+STATUS_OK = 'success'
+EVENT_ACTION = 'action'
+
+# Worker event types
+EVENT_VALIDATE_MODULE = "VALIDATE_MODULE"
+EVENT_LIST_MODULES = "LIST_MODULES"
+EVENT_LIST_SESSIONS = "LIST_SESSIONS"
+EVENT_KILL_STEP_EXECUTION = "KILL_STEP_EXECUTION"
+EVENT_HEALTH_CHECK = "HEALTH_CHECK"
+EVENT_START_TRIGGER = "START_TRIGGER"
+EVENT_STOP_TRIGGER = "STOP_TRIGGER"
+EVENT_TRIGGER_STAGE = "TRIGGER_STAGE"
+
+# Scheduler
+SCHEDULER = 'SCHEDULER'
+ADD_REPEATING_JOB = 'add_repeating_job'
+ADD_JOB = 'add_job'
+REMOVE_JOB = 'remove_job'
+RESUME_SCHEDULER = 'resume_scheduler'
+PAUSE_SCHEDULER = 'pause_scheduler'
+GET_JOBS = 'get_jobs'
+RESUME_JOB = 'resume_job'
+PAUSE_JOB = 'pause_job'
+RESCHEDULE_JOB = 'reschedule_job'

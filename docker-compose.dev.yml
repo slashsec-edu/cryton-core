@@ -1,0 +1,98 @@
+version: '3'
+services:
+  cryton_db:
+    image: postgres
+    restart: always
+    container_name: "cryton_db"
+    environment:
+      POSTGRES_PASSWORD: $CRYTON_DB_PASSWORD
+      POSTGRES_USER: $CRYTON_DB_USERNAME
+      POSTGRES_DB: $CRYTON_DB_NAME
+    expose:
+      - "5432"
+    ports:
+      - "15432:5432"
+    env_file:
+      - .env
+  cryton_pgbouncer:
+    image: edoburu/pgbouncer:1.8.1
+    restart: always
+    container_name: "cryton_pgbouncer"
+    depends_on:
+      - cryton_db
+    environment:
+      DB_HOST: cryton_db
+      DB_USER: $CRYTON_DB_USERNAME
+      DB_NAME: $CRYTON_DB_NAME
+      DB_PASSWORD: $CRYTON_DB_PASSWORD
+      MAX_CLIENT_CONN: 5000
+      DEFAULT_POOL_SIZE: 8
+      MIN_POOL_SIZE: 8
+      POOL_MODE: transaction
+    expose:
+      - "5432"
+    env_file:
+      - .env
+  cryton_app:
+    restart: always
+    build:
+      context: .
+      dockerfile: docker_files/Dockerfile-cryton
+    image: cryton
+    expose:
+      - "8000"
+    container_name: "cryton_app"
+    depends_on:
+      - cryton_db
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+  cryton_rabbit:
+    hostname: cryton_rabbit
+    image: rabbitmq:3.8.5-management
+    restart: always
+    container_name: "cryton_rabbit"
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_DEFAULT_USER: ${CRYTON_RABBIT_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${CRYTON_RABBIT_PASSWORD}
+    ports:
+      - "5672:5672"
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: rabbitmqctl eval '
+        { true, rabbit_app_booted_and_running } = { rabbit:is_booted(node()), rabbit_app_booted_and_running },
+        { [], no_alarms } = { rabbit:alarms(), no_alarms },
+        [] /= rabbit_networking:active_listeners(),
+        rabbitmq_node_is_healthy.
+        ' || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  cryton_listener:
+    restart: always
+    image: cryton # No build directory, just reuse that image
+    container_name: "cryton_listener"
+    depends_on:
+      - cryton_db
+      - cryton_rabbit
+    volumes:
+      - ./:/app
+    entrypoint: [ "cryton-manage", "startlistener" ]
+    env_file:
+      - .env
+
+  apache:
+    hostname: cryton
+    container_name: cryton_apache
+    build:
+      context: .
+      dockerfile: docker_files/Dockerfile-apache
+    image: cryton_apache
+    ports:
+      - "127.0.0.1:$CRYTON_PUBLIC_PORT:80"
+    env_file:
+      - .env

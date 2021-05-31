@@ -1,5 +1,6 @@
 from django.test import TestCase
-from cryton.lib import scheduler, logger
+from cryton.lib.services import scheduler
+from cryton.lib.util import logger
 from mock import patch, Mock
 import os
 import datetime
@@ -15,125 +16,99 @@ mock_exc.start.side_effect = run_null
 devnull = open(os.devnull, 'w')
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
 @patch("sys.stdout", devnull)
+@patch('cryton.lib.services.scheduler.config.MISFIRE_GRACE_TIME', 42)
 class SchedulerTest(TestCase):
 
     def setUp(self) -> None:
+        self.scheduler_obj = scheduler.SchedulerService()
+        self.misfire = 42
         pass
 
-    @patch('cryton.lib.scheduler.ThreadedServer', mock_exc)
-    @patch('cryton.lib.scheduler.BlockingScheduler', Mock())
-    def test_start_scheduler(self):
-        mock_exc.shutdown.side_effect = KeyboardInterrupt('Test')
-
-        ret = scheduler.start_scheduler()
-
-        self.assertIsNone(ret)
-
-        ret = scheduler.start_scheduler(True)
-
-        self.assertIsNone(ret)
-
-    @patch('cryton.lib.scheduler.config.MISFIRE_GRACE_TIME')
-    def test_exposed_add_job(self, config_mock):
-        mock_scheduler = Mock()
+    def test_exposed_add_job(self):
         mock_job = Mock()
         mock_job.id = '42'
-        mock_scheduler.add_job.return_value = mock_job
-        service = scheduler.SchedulerService(mock_scheduler)
+        mock_add_job = Mock(return_value=mock_job)
+        self.scheduler_obj.scheduler.add_job = mock_add_job
+
         fnc = Mock
 
-        ret = service.exposed_add_job(fnc, [], datetime.datetime(3000, 3, 14, 15, 0))
+        ret = self.scheduler_obj.exposed_add_job(fnc, [], datetime.datetime(3000, 3, 14, 15, 0))
         self.assertEqual(ret, '42')
-        mock_scheduler.add_job.assert_called_with(fnc, 'date', misfire_grace_time=config_mock,
-                                                  run_date='3000-03-14 15:00:00', args=[])
+        mock_add_job.assert_called_with(fnc, 'date', misfire_grace_time=self.misfire,
+                                        run_date='3000-03-14 15:00:00', args=[], max_instances=100)
 
     def test_exposed_reschedule_job(self):
-        mock_scheduler = Mock()
-        mock_scheduler.reschedule_job.return_value = 0
-        service = scheduler.SchedulerService(mock_scheduler)
 
-        ret = service.exposed_reschedule_job('42')
+        mock_reschedule_job = Mock(return_value='42')
+        self.scheduler_obj.scheduler.reschedule_job = mock_reschedule_job
 
-        mock_scheduler.reschedule_job.assert_called_with('42')
-        self.assertEqual(ret, 0)
+        ret = self.scheduler_obj.exposed_reschedule_job('42')
+        self.assertEqual(ret, '42')
 
     def test_exposed_pause_job(self):
-        mock_scheduler = Mock()
-        mock_scheduler.pause_job.return_value = 0
-        service = scheduler.SchedulerService(mock_scheduler)
+        mock_pause_job = Mock(return_value='42')
+        self.scheduler_obj.scheduler.pause_job = mock_pause_job
 
-        ret = service.exposed_pause_job('42')
-
-        mock_scheduler.pause_job.assert_called_with('42')
-        self.assertEqual(ret, 0)
-
+        ret = self.scheduler_obj.exposed_pause_job('42')
+        self.assertEqual(ret, '42')
+        
     def test_exposed_resume_job(self):
-        mock_scheduler = Mock()
-        mock_scheduler.resume_job.return_value = 0
-        service = scheduler.SchedulerService(mock_scheduler)
+        mock_resume_job = Mock(return_value='42')
+        self.scheduler_obj.scheduler.resume_job = mock_resume_job
 
-        ret = service.exposed_resume_job('42')
-
-        mock_scheduler.resume_job.assert_called_with('42')
-        self.assertEqual(ret, 0)
+        ret = self.scheduler_obj.exposed_resume_job('42')
+        self.assertEqual(ret, '42')
 
     def test_exposed_remove_job(self):
-        mock_scheduler = Mock()
-        mock_scheduler.remove_job.return_value = 0
-        service = scheduler.SchedulerService(mock_scheduler)
+        mock_remove_job = Mock(return_value=None)
+        self.scheduler_obj.scheduler.remove_job = mock_remove_job
 
-        service.exposed_remove_job('42')
+        ret = self.scheduler_obj.exposed_remove_job('42')
+        self.assertEqual(ret, None)
 
-        mock_scheduler.remove_job.assert_called_with('42')
+        mock_remove_job.assert_called_with('42')
 
     def test_exposed_get_job(self):
-        mock_scheduler = Mock()
-        mock_scheduler.get_job.return_value = 0
-        service = scheduler.SchedulerService(mock_scheduler)
+        mock_get_job = Mock(return_value='666')
+        self.scheduler_obj.scheduler.get_job = mock_get_job
 
-        ret = service.exposed_get_job('42')
+        ret = self.scheduler_obj.exposed_get_job('666')
+        self.assertEqual(ret, '666')
 
-        mock_scheduler.get_job.assert_called_with('42')
-        self.assertEqual(ret, 0)
+        mock_get_job.assert_called_with('666')
 
     def test_exposed_get_jobs(self):
-        mock_scheduler = Mock()
-        mock_scheduler.get_jobs.return_value = ["job1", "job2"]
-        service = scheduler.SchedulerService(mock_scheduler)
+        mock_get_jobs = Mock(return_value=["job1", "job2"])
+        self.scheduler_obj.scheduler.get_jobs = mock_get_jobs
 
-        ret = service.exposed_get_jobs()
-
-        mock_scheduler.get_jobs.assert_called_once()
+        ret = self.scheduler_obj.exposed_get_jobs()
         self.assertEqual(ret, ["job1", "job2"])
 
     def test_exposed_pause_scheduler(self):
-        mock_scheduler = Mock()
-        mock_scheduler.pause.return_value = 0
-        service = scheduler.SchedulerService(mock_scheduler)
+        mock_pause = Mock(return_value=0)
+        self.scheduler_obj.scheduler.pause = mock_pause
 
-        ret = service.exposed_pause_scheduler()
-
-        mock_scheduler.pause.assert_called_once()
+        ret = self.scheduler_obj.exposed_pause_scheduler()
         self.assertEqual(ret, 0)
+
+        mock_pause.assert_called_once()
 
     def test_exposed_resume_scheduler(self):
-        mock_scheduler = Mock()
-        mock_scheduler.resume.return_value = 0
-        service = scheduler.SchedulerService(mock_scheduler)
+        mock_resume = Mock(return_value=0)
+        self.scheduler_obj.scheduler.resume = mock_resume
 
-        ret = service.exposed_resume_scheduler()
-
-        mock_scheduler.resume.assert_called_once()
+        ret = self.scheduler_obj.exposed_resume_scheduler()
         self.assertEqual(ret, 0)
+
+        mock_resume.assert_called_once()
 
     def test_health_check(self):
-        mock_scheduler = Mock()
-        mock_scheduler.resume.return_value = 0
-        service = scheduler.SchedulerService(mock_scheduler)
+        mock_healthcheck = Mock(return_value=0)
+        self.scheduler_obj.health_check = mock_healthcheck
 
-        ret = service.health_check()
-
+        ret = self.scheduler_obj.health_check()
         self.assertEqual(ret, 0)
 
+        mock_healthcheck.assert_called_once()

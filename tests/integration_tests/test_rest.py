@@ -13,16 +13,8 @@ from cryton.cryton_rest_api.models import (
     ExecutionVariableModel
 )
 
-
-from cryton.lib import (
-    plan,
-    stage,
-    step,
-    run,
-    logger,
-    creator,
-    states
-)
+from cryton.lib.util import creator, logger, states
+from cryton.lib.models import stage, plan, step, run
 
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -35,13 +27,14 @@ import yaml
 import datetime
 
 from model_bakery import baker
+from django.utils import timezone
 
 devnull = open(os.devnull, "w")
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
 @patch("sys.stdout", devnull)
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
 class RestPlanTest(APITestCase):
 
     def setUp(self):
@@ -175,7 +168,7 @@ class RestPlanTest(APITestCase):
 
 
 @patch("sys.stdout", devnull)
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
 class RestStageTest(APITestCase):
 
     def setUp(self):
@@ -267,7 +260,7 @@ class RestStageTest(APITestCase):
 
 
 @patch("sys.stdout", devnull)
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
 class RestStepTest(APITestCase):
 
     def setUp(self):
@@ -365,8 +358,8 @@ class RestStepTest(APITestCase):
 
 
 @patch("sys.stdout", devnull)
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
-@patch("cryton.lib.plan.os.makedirs", Mock())
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch("cryton.lib.models.plan.os.makedirs", Mock())
 class RestRunTest(APITestCase):
 
     def setUp(self):
@@ -486,7 +479,7 @@ class RestRunTest(APITestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    @patch('cryton.lib.scheduler_client.schedule_function', Mock(return_value=1))
+    @patch('cryton.lib.util.scheduler_client.schedule_function', Mock(return_value=1))
     def test_schedule(self):
         # Missing schedule time
         args = {}
@@ -505,7 +498,7 @@ class RestRunTest(APITestCase):
 
         # correct state
         self.run_obj.state = states.PENDING
-        args.update({"start_time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
+        args.update({"start_time": timezone.now().strftime('%Y-%m-%d %H:%M:%S')})
 
         response = self.client.post(reverse("runmodel-schedule", kwargs={"pk": self.run_obj.model.id}),
                                     args,
@@ -520,8 +513,8 @@ class RestRunTest(APITestCase):
                                     content_type="application/json")
         self.assertEqual(response.status_code, 400)
 
-    @patch('cryton.lib.scheduler_client.schedule_function', Mock(return_value=1))
-    @patch('cryton.lib.scheduler_client.remove_job', Mock(return_value=0))
+    @patch('cryton.lib.util.scheduler_client.schedule_function', Mock(return_value=1))
+    @patch('cryton.lib.util.scheduler_client.remove_job', Mock(return_value=0))
     def test_reschedule(self):
         # Missing schedule time
         args = {}
@@ -540,7 +533,7 @@ class RestRunTest(APITestCase):
 
         # correct state
         self.run_obj.state = states.SCHEDULED
-        args.update({"start_time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
+        args.update({"start_time": timezone.now().strftime('%Y-%m-%d %H:%M:%S')})
 
         response = self.client.post(reverse("runmodel-reschedule", kwargs={"pk": self.run_obj.model.id}),
                                     args,
@@ -555,7 +548,7 @@ class RestRunTest(APITestCase):
                                     content_type="application/json")
         self.assertEqual(response.status_code, 400)
 
-    @patch('cryton.lib.scheduler_client.remove_job', Mock(return_value=0))
+    @patch('cryton.lib.util.scheduler_client.remove_job', Mock(return_value=0))
     def test_unschedule(self):
 
         # correct state
@@ -572,11 +565,11 @@ class RestRunTest(APITestCase):
                                     content_type="application/json")
         self.assertEqual(response.status_code, 400)
 
-    @patch('cryton.lib.scheduler_client.remove_job', Mock(return_value=0))
-    @patch('cryton.lib.scheduler_client.schedule_function', Mock(return_value=0))
+    @patch('cryton.lib.util.scheduler_client.remove_job', Mock(return_value=0))
+    @patch('cryton.lib.util.scheduler_client.schedule_function', Mock(return_value=0))
     def test_postpone(self):
 
-        self.run_obj.start_time = datetime.datetime.now()
+        self.run_obj.schedule_time = timezone.now()
 
         # No delta
         self.run_obj.state = states.SCHEDULED
@@ -636,7 +629,7 @@ class RestRunTest(APITestCase):
                                    content_type="application/json")
         self.assertEqual(response.status_code, 200)
 
-    @patch("cryton.lib.util.rabbit_send_oneway_msg", Mock())
+    @patch("cryton.lib.util.util.rabbit_send_oneway_msg", Mock())
     def test_pause(self):
         # Wrong state
         self.run_obj.state = states.SCHEDULED
@@ -672,9 +665,9 @@ class RestRunTest(APITestCase):
                                     content_type="application/json")
         self.assertEqual(response.status_code, 200)
 
-    @patch('cryton.lib.scheduler_client.schedule_function', Mock(return_value=1))
-    @patch('cryton.lib.scheduler_client.remove_job', Mock(return_value=1))
-    @patch("cryton.lib.util.rabbit_send_oneway_msg", Mock())
+    @patch('cryton.lib.util.scheduler_client.schedule_function', Mock(return_value=1))
+    @patch('cryton.lib.util.scheduler_client.remove_job', Mock(return_value=1))
+    @patch("cryton.lib.util.util.rabbit_send_oneway_msg", Mock())
     def test_whole_chain(self):
         # create
         with open(TESTS_DIR + '/plan.yaml') as plan_yaml:
@@ -697,25 +690,24 @@ class RestRunTest(APITestCase):
         self.assertEqual(plan_id, plan_obj.model.id)
 
         # schedule
-        start_time_dt = datetime.datetime.strptime("2050-10-11 09:11:47", '%Y-%m-%d %H:%M:%S')
+        schedule_time_dt = datetime.datetime.strptime("2050-10-11 09:11:47", '%Y-%m-%d %H:%M:%S')
         args = {"start_time": "2050-10-11 09:11:47",
                 "worker": "worker1"}
         response = self.client.post(reverse("runmodel-schedule", kwargs={"pk": self.run_obj.model.id}),
                                     args,
                                     content_type="application/json"
                                     )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.run_obj.start_time, start_time_dt)
+        self.assertEqual(self.run_obj.schedule_time, schedule_time_dt)
 
         # reschedule
-        start_time_dt = datetime.datetime.strptime("2040-10-11 09:11:47", '%Y-%m-%d %H:%M:%S')
+        schedule_time_dt = datetime.datetime.strptime("2040-10-11 09:11:47", '%Y-%m-%d %H:%M:%S')
         args = {"start_time": "2040-10-11 09:11:47"}
         response = self.client.post(reverse("runmodel-reschedule", kwargs={"pk": self.run_obj.model.id}),
                                     args,
                                     content_type="application/json"
                                     )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.run_obj.start_time, start_time_dt)
+        self.assertEqual(self.run_obj.schedule_time, schedule_time_dt)
 
         # postpone
         args = {'delta': '1h0m0s'}
@@ -724,7 +716,7 @@ class RestRunTest(APITestCase):
                                     content_type="application/json"
                                     )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.run_obj.start_time, start_time_dt + datetime.timedelta(hours=1))
+        self.assertEqual(self.run_obj.schedule_time, schedule_time_dt + datetime.timedelta(hours=1))
 
         # unschedule
         args = {}
@@ -752,7 +744,7 @@ class RestRunTest(APITestCase):
 
 
 @patch("sys.stdout", devnull)
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
 class RestWorkerTest(APITestCase):
 
     def setUp(self):
@@ -775,7 +767,7 @@ class RestWorkerTest(APITestCase):
 
 
 @patch("sys.stdout", devnull)
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
 class RestExecVarsTest(APITestCase):
     def setUp(self):
         self.client = Client()
@@ -813,7 +805,7 @@ class RestExecVarsTest(APITestCase):
 
 
 @patch("sys.stdout", devnull)
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-test'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
 class RestFilesTest(APITestCase):
 
     def setUp(self):
@@ -860,7 +852,7 @@ class FilteringTest(APITestCase):
         self.assertEqual(res_count, 2)
 
         response = self.client.get(reverse("planexecutionmodel-list"),
-                                   {"run__id": 0},
+                                   {"run__id": 12345},
                                    content_type="application/json")
         self.assertEqual(response.status_code, 200)
 
@@ -900,7 +892,7 @@ class FilteringTest(APITestCase):
         self.assertEqual(res_count, 2)
 
         response = self.client.get(reverse("stageexecutionmodel-list"),
-                                   {"plan_execution__run__id": 0},
+                                   {"plan_execution__run__id": -1},
                                    content_type="application/json")
         self.assertEqual(response.status_code, 200)
 
@@ -947,6 +939,7 @@ class FilteringTest(APITestCase):
         self.assertEqual(response.status_code, 200)
 
         res_count = response.data.get("count")
+        # TODO sometimes returns 2
         self.assertEqual(res_count, 0)
 
         response = self.client.get(reverse("stepexecutionmodel-list"),

@@ -1,0 +1,17 @@
+FROM python:3.8-alpine as base
+
+RUN apk add --update tzdata
+
+FROM python:3.8-alpine
+RUN mkdir /app
+WORKDIR /app
+COPY . /app
+
+COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
+
+RUN apk update && apk add postgresql-dev gcc python3-dev musl-dev linux-headers
+RUN python setup.py install
+
+COPY ./docker_files/startup.sh /
+RUN chmod +x /startup.sh
+ENTRYPOINT /startup.sh

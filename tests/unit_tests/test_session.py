@@ -1,6 +1,7 @@
 from django.test import TestCase
-from mock import patch, Mock
-from cryton.lib import session, exceptions, logger
+from mock import patch
+from cryton.lib.util import exceptions, logger
+from cryton.lib.models import session
 
 from cryton.cryton_rest_api.models import (
     SessionModel,
@@ -14,7 +15,7 @@ from model_bakery import baker
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
-@patch('cryton.lib.logger.logger', logger.structlog.getLogger('cryton-debug'))
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
 class TestSession(TestCase):
 
     def setUp(self) -> None:

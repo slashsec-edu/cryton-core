@@ -1,0 +1,175 @@
+id: 8
+plan_id: 3
+plan_name: Http-trigger example
+state: FINISHED
+schedule_time: null
+start_time: '2021-05-03T14:51:03.806487Z'
+pause_time: null
+finish_time: '2021-05-03T14:51:20.681767Z'
+plan_executions:
+- id: 8
+  stage_name: Http-trigger example
+  state: FINISHED
+  schedule_time: null
+  start_time: '2021-05-03T14:51:03.817804Z'
+  finish_time: '2021-05-03T14:51:19.565045Z'
+  pause_time: null
+  worker_id: 1
+  worker_name: name
+  evidence_dir: /root/.cryton/evidence/plan_003-http-trigger_example/run_8/worker_name
+  stage_executions:
+  - id: 14
+    stage_name: stage-one
+    state: FINISHED
+    start_time: '2021-05-03T14:51:18.946643Z'
+    pause_time: null
+    finish_time: '2021-05-03T14:51:19.181317Z'
+    schedule_time: '2021-05-03T14:51:18.892667Z'
+    step_executions:
+    - id: 20
+      step_name: get-request
+      state: FINISHED
+      start_time: '2021-05-03T14:51:18.983139Z'
+      finish_time: '2021-05-03T14:51:19.116392Z'
+      std_err: No error
+      std_out: null
+      mod_err: "  % Total    % Received % Xferd  Average Speed   Time    Time    \
+        \ Time  Current\n                                 Dload  Upload   Total  \
+        \ Spent    Left  Speed\n\r  0     0    0     0    0     0      0      0 --:--:--\
+        \ --:--:-- --:--:--     0\r  0     0    0     0    0     0      0      0 --:--:--\
+        \ --:--:-- --:--:--     0\n"
+      mod_out: ''
+      evidence_file: No evidence
+      result: OK
+      valid: false
+  - id: 15
+    stage_name: stage-two
+    state: FINISHED
+    start_time: '2021-05-03T14:51:19.231583Z'
+    pause_time: null
+    finish_time: '2021-05-03T14:51:19.541789Z'
+    schedule_time: null
+    step_executions:
+    - id: 21
+      step_name: scan-localhost
+      state: FINISHED
+      start_time: '2021-05-03T14:51:19.285441Z'
+      finish_time: '2021-05-03T14:51:19.467908Z'
+      std_err: No error
+      std_out: null
+      mod_err: null
+      mod_out:
+        127.0.0.1:
+          ports:
+          - state: closed
+            portid: '21'
+            reason: conn-refused
+            scripts: []
+            service:
+              conf: '3'
+              name: ftp
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          - state: open
+            portid: '22'
+            reason: syn-ack
+            scripts: []
+            service:
+              conf: '3'
+              name: ssh
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          - state: closed
+            portid: '23'
+            reason: conn-refused
+            scripts: []
+            service:
+              conf: '3'
+              name: telnet
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          - state: closed
+            portid: '25'
+            reason: conn-refused
+            scripts: []
+            service:
+              conf: '3'
+              name: smtp
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          - state: closed
+            portid: '80'
+            reason: conn-refused
+            scripts: []
+            service:
+              conf: '3'
+              name: http
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          - state: closed
+            portid: '110'
+            reason: conn-refused
+            scripts: []
+            service:
+              conf: '3'
+              name: pop3
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          - state: closed
+            portid: '139'
+            reason: conn-refused
+            scripts: []
+            service:
+              conf: '3'
+              name: netbios-ssn
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          - state: closed
+            portid: '443'
+            reason: conn-refused
+            scripts: []
+            service:
+              conf: '3'
+              name: https
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          - state: closed
+            portid: '445'
+            reason: conn-refused
+            scripts: []
+            service:
+              conf: '3'
+              name: microsoft-ds
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          - state: closed
+            portid: '3389'
+            reason: conn-refused
+            scripts: []
+            service:
+              conf: '3'
+              name: ms-wbt-server
+              method: table
+            protocol: tcp
+            reason_ttl: '0'
+          state:
+            state: up
+            reason: conn-refused
+            reason_ttl: '0'
+          osmatch: {}
+          hostname:
+          - name: localhost
+            type: PTR
+          macaddress: null
+      evidence_file: No evidence
+      result: OK
+      valid: false
