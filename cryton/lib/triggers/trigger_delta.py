@@ -1,140 +1,105 @@
 from datetime import datetime, timedelta
-
+from django.utils import timezone
 import schema
 
 from cryton.lib.util import constants as co, exceptions, logger, scheduler_client, states as st
-from cryton.lib.models import stage, step
-from django.utils import timezone
+from cryton.lib.triggers.trigger_base import TriggerBase
 
 
-class TriggerDelta:
-    """
-    'Trigger type 'delta'
-    """
+class TriggerDelta(TriggerBase):
     arg_schema = schema.Schema({schema.Or('hours', 'minutes', 'seconds', only_one=False): int})
 
-    def __init__(self, **kwargs):
+    def __init__(self, stage_execution):
         """
-        :param kwargs:
-            stage_execution_id: int
+        :param stage_execution: StageExecution's object
         """
-        self.stage_execution_id = kwargs.get("stage_execution_id")
-        self.stage_execution_obj = stage.StageExecution(stage_execution_id=self.stage_execution_id)
-        self.trigger_args = self.stage_execution_obj.model.stage_model.trigger_args
+        super().__init__(stage_execution)
 
-    def start(self) -> str:
+    def start(self) -> None:
         """
-        Runs schedule() method
-        :return: APS id
+        Runs schedule() method.
+        :return: None
         """
-        return self.schedule()
+        self.schedule()
 
     def stop(self) -> None:
         """
-        Runs unschedule() method
-        :return:
+        Checks if StageExecution is in final state and runs unschedule() method.
+        :return: None
         """
-        return self.unschedule()
+        if self.stage_execution.state not in st.STAGE_FINAL_STATES:
+            self.unschedule()
 
-    def schedule(self) -> str:
+    def schedule(self) -> None:
         """
-        Schedule stage execution
-        :return: APS id
+        Schedule stage execution.
+        :return: None
         """
 
-        st.StageStateMachine(self.stage_execution_id).validate_state(self.stage_execution_obj.state,
+        st.StageStateMachine(self.stage_execution_id).validate_state(self.stage_execution.state,
                                                                      st.STAGE_SCHEDULE_STATES)
-        if self.stage_execution_obj.model.stage_model.trigger_type != co.DELTA:
+        if self.stage_execution.model.stage_model.trigger_type != co.DELTA:
             raise exceptions.UnexpectedValue(
                 'StageExecution with ID {} cannot be scheduled due to not having delta parameter'.format(
                     self.stage_execution_id)
             )
 
         schedule_time = self.__create_schedule_time()
-        self.stage_execution_obj.schedule_time = schedule_time
-        self.stage_execution_obj.pause_time = None
-        self.stage_execution_obj.state = st.SCHEDULED
-        self.stage_execution_obj.aps_job_id = scheduler_client.schedule_function(
+        self.stage_execution.schedule_time = schedule_time
+        self.stage_execution.pause_time = None
+        self.stage_execution.state = st.SCHEDULED
+        self.stage_execution.aps_job_id = scheduler_client.schedule_function(
             "cryton.lib.models.stage:execution", [self.stage_execution_id], schedule_time)
 
         logger.logger.info("stagexecution scheduled", stage_execution_id=self.stage_execution_id,
-                           stage_name=self.stage_execution_obj.model.stage_model.name, status='success')
-
-        return self.stage_execution_obj.aps_job_id
+                           stage_name=self.stage_execution.model.stage_model.name, status='success')
 
     def unschedule(self) -> None:
         """
-        Unschedule StageExecution from a APScheduler
+        Unschedule StageExecution from a APScheduler.
         :raises:
             ConnectionRefusedError
         :return: None
         """
-        st.StageStateMachine(self.stage_execution_id).validate_state(self.stage_execution_obj.state,
+        st.StageStateMachine(self.stage_execution_id).validate_state(self.stage_execution.state,
                                                                      st.STAGE_UNSCHEDULE_STATES)
 
-        scheduler_client.remove_job(self.stage_execution_obj.aps_job_id)
-        self.stage_execution_obj.aps_job_id, self.stage_execution_obj.schedule_time = None, None
-        self.stage_execution_obj.state = st.PENDING
+        scheduler_client.remove_job(self.stage_execution.aps_job_id)
+        self.stage_execution.aps_job_id, self.stage_execution.schedule_time = None, None
+        self.stage_execution.state = st.PENDING
 
         logger.logger.info("stagexecution unscheduled", stage_execution_id=self.stage_execution_id,
-                           stage_name=self.stage_execution_obj.model.stage_model.name, status='success')
-
-        return None
+                           stage_name=self.stage_execution.model.stage_model.name, status='success')
 
     def pause(self) -> None:
         """
-        Pause stage execution
-        :return:
+        Pause stage execution.
+        :return: None
         """
-        if self.stage_execution_obj.state in st.STAGE_UNSCHEDULE_STATES:
+        if self.stage_execution.state in st.STAGE_UNSCHEDULE_STATES:
             self.unschedule()
-            self.stage_execution_obj.pause_time = timezone.now()
+            self.stage_execution.pause_time = timezone.now()
 
         # If stage is RUNNING, set PAUSING state. It will be PAUSED once the currently
         # RUNNING step finished and listener gets it's return value
-        elif self.stage_execution_obj.state == st.RUNNING:
+        elif self.stage_execution.state == st.RUNNING:
             logger.logger.info("stageexecution pausing", stage_execution_id=self.stage_execution_id)
-            self.stage_execution_obj.state = st.PAUSING
-
-        return
-
-    def unpause(self) -> None:
-        """
-        Unpause stage execution (by issuing 'execute' call)
-        :return:
-        """
-        self.stage_execution_obj.state = st.RUNNING
-        self.stage_execution_obj.pause_time = None
-
-        if self.stage_execution_obj.all_steps_finished:
-            self.stage_execution_obj.state = st.FINISHED
-            self.stage_execution_obj.finish_time = timezone.now()
-
-            # start WAITING stages
-            self.stage_execution_obj.execute_subjects_to_dependency()
-            return
-
-        for step_exec in self.stage_execution_obj.model.step_executions.filter(state=st.PAUSED):
-            step.StepExecution(step_execution_id=step_exec.id).execute()
-        return
+            self.stage_execution.state = st.PAUSING
 
     def __create_schedule_time(self) -> datetime:
         """
-        Create Stage's start time
+        Create Stage's start time.
         :return: Stage's start time
         """
-        trigger_args = self.stage_execution_obj.model.stage_model.trigger_args
-        delta = timedelta(
-            hours=trigger_args.get('hours', 0), minutes=trigger_args.get('minutes', 0),
-            seconds=trigger_args.get('seconds', 0)
-        )
+        trigger_args = self.stage_execution.model.stage_model.trigger_args
+        delta = timedelta(hours=trigger_args.get('hours', 0), minutes=trigger_args.get('minutes', 0),
+                          seconds=trigger_args.get('seconds', 0))
 
-        if self.stage_execution_obj.pause_time:
-            additional_time = self.stage_execution_obj.model.plan_execution.start_time + delta - \
-                              self.stage_execution_obj.pause_time
+        if self.stage_execution.pause_time:
+            additional_time = self.stage_execution.model.plan_execution.start_time + delta - \
+                              self.stage_execution.pause_time
         else:
             additional_time = delta
 
         schedule_time = timezone.now() + additional_time
-
         return schedule_time

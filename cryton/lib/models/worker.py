@@ -95,8 +95,11 @@ class Worker:
         Check if Worker is consuming its attack queue
         :return:
         """
+        event_info = {constants.EVENT_T: constants.EVENT_HEALTH_CHECK,
+                      constants.EVENT_V: {}}
+
         with util.Rpc() as worker_rpc:
-            response = worker_rpc.call(self.control_q_name, constants.EVENT_HEALTH_CHECK, {"event_v": {}}, 5)
+            response = worker_rpc.call(self.control_q_name, event_info, 5)
             if response is not None and response.get('event_v').get(constants.RETURN_CODE) == 0:
                 self.state = states.UP
                 return True

@@ -132,7 +132,7 @@ class TestVariables(TestCase):
 
     @patch('cryton.lib.util.scheduler_client.schedule_function')
     @patch('cryton.lib.util.scheduler_client.remove_job')
-    @patch('cryton.lib.util.util.execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
     def test_use_var(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -158,17 +158,13 @@ class TestVariables(TestCase):
 
         step_arguments = {'cmd': 'testing'}
 
-        moc_exec.assert_called_with(
-            rabbit_channel=rabbit_channel,
-            attack_module=step_ex_obj_2.step_model.attack_module,
-            attack_module_arguments=step_arguments,
-            worker_model=step_ex_obj_2.stage_execution.plan_execution.worker,
-            step_execution_id=step_ex_obj_2.id,
-            executor=step_ex_obj_2.step_model.executor)
+        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.attack_module, step_arguments,
+                                    step_ex_obj_2.stage_execution.plan_execution.worker,
+                                    step_ex_obj_2.step_model.executor)
 
     @patch('cryton.lib.util.scheduler_client.schedule_function')
     @patch('cryton.lib.util.scheduler_client.remove_job')
-    @patch('cryton.lib.util.util.execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
     def test_use_var_prefix(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -194,17 +190,13 @@ class TestVariables(TestCase):
 
         step_arguments = {'cmd': 'testing'}
 
-        moc_exec.assert_called_with(
-            rabbit_channel=rabbit_channel,
-            attack_module=step_ex_obj_2.step_model.attack_module,
-            attack_module_arguments=step_arguments,
-            worker_model=step_ex_obj_2.stage_execution.plan_execution.worker,
-            step_execution_id=step_ex_obj_2.id,
-            executor=step_ex_obj_2.step_model.executor)
+        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.attack_module, step_arguments,
+                                    step_ex_obj_2.stage_execution.plan_execution.worker,
+                                    step_ex_obj_2.step_model.executor)
 
     @patch('cryton.lib.util.scheduler_client.schedule_function')
     @patch('cryton.lib.util.scheduler_client.remove_job')
-    @patch('cryton.lib.util.util.execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
     def test_use_var_mapping(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -230,17 +222,13 @@ class TestVariables(TestCase):
 
         step_arguments = {'cmd': 'testing'}
 
-        moc_exec.assert_called_with(
-            rabbit_channel=rabbit_channel,
-            attack_module=step_ex_obj_2.step_model.attack_module,
-            attack_module_arguments=step_arguments,
-            worker_model=step_ex_obj_2.stage_execution.plan_execution.worker,
-            step_execution_id=step_ex_obj_2.id,
-            executor=step_ex_obj_2.step_model.executor)
+        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.attack_module, step_arguments,
+                                    step_ex_obj_2.stage_execution.plan_execution.worker,
+                                    step_ex_obj_2.step_model.executor)
 
     @patch('cryton.lib.util.scheduler_client.schedule_function')
     @patch('cryton.lib.util.scheduler_client.remove_job')
-    @patch('cryton.lib.util.util.execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
     def test_use_var_parent(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -268,10 +256,6 @@ class TestVariables(TestCase):
 
         step_arguments = {'cmd': 'testing'}
 
-        moc_exec.assert_called_with(
-            rabbit_channel=rabbit_channel,
-            attack_module=step_ex_obj_2.step_model.attack_module,
-            attack_module_arguments=step_arguments,
-            worker_model=step_ex_obj_2.stage_execution.plan_execution.worker,
-            step_execution_id=step_ex_obj_2.id,
-            executor=step_ex_obj_2.step_model.executor)
+        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.attack_module, step_arguments,
+                                    step_ex_obj_2.stage_execution.plan_execution.worker,
+                                    step_ex_obj_2.step_model.executor)

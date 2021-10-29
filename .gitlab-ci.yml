@@ -73,7 +73,7 @@ integrationtests:
       - .cache/pip
       - venv
   script:
-    - pytest --cov=cryton tests/integration_tests/ --cov-config=.coveragerc-integration
+    - pytest --cov=cryton tests/functional_tests/ --cov-config=.coveragerc-functional
   coverage: '/TOTAL.*\s+(\d+%)$/'
 
 #buildPython:

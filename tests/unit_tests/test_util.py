@@ -1,5 +1,5 @@
 from django.test import TestCase
-from mock import patch, MagicMock, call, Mock
+from mock import patch, MagicMock, call, Mock, mock_open
 import os
 import yaml
 import datetime
@@ -10,12 +10,7 @@ import copy
 
 from cryton.lib.util import util
 
-from cryton.cryton_rest_api.models import (
-    WorkerModel,
-    StepModel,
-    StageExecutionModel,
-    StepExecutionModel
-)
+from cryton.cryton_rest_api.models import WorkerModel
 
 TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
@@ -26,22 +21,6 @@ class TestUtil(TestCase):
 
     def setUp(self) -> None:
         self.worker = baker.make(WorkerModel)
-
-    @patch('cryton.lib.util.util.rabbit_connection')
-    def test_execute_attack_module(self, mock_rabb):
-        self.stage_execution = baker.make(StageExecutionModel)
-        self.step_model = baker.make(StepModel)
-        self.step_execution_obj = StepExecutionModel.objects.create(step_model=self.step_model,
-                                                                    stage_execution=self.stage_execution)
-        rabbit_channel = MagicMock()
-        mock_rabb.return_value = (MagicMock(), MagicMock())
-        # mock_rabb().execute().ret = json.dumps(ret_val)
-
-        ret = util.execute_attack_module(rabbit_channel=rabbit_channel,
-                                         attack_module='test', attack_module_arguments={'test': 'test'},
-                                         step_execution_id=self.step_execution_obj.id,
-                                         worker_model=self.worker)
-        self.assertIsInstance(ret, str)
 
     def test_rm_path_file(self):
         file_name = '/tmp/file_test-for-remove0356241'
@@ -333,3 +312,32 @@ class TestUtil(TestCase):
 
         with self.assertRaises(KeyError):
             util.rename_key(dict_in, rename_from, rename_to)
+
+    @patch("cryton.lib.util.util.open", mock_open(read_data="line1 \nline2 \n"))
+    def test_get_logs(self):
+        result = util.get_logs()
+        self.assertEqual(["line1", "line2"], result)
+
+
+class TestRpc(TestCase):
+    @patch("cryton.lib.util.util.rabbit_connection")
+    def setUp(self, mock_rabbit_conn) -> None:
+        mock_rabbit_conn.return_value = Mock()
+        self.rpc_obj = util.Rpc()
+
+    @patch("cryton.lib.util.util.Message.create", Mock())
+    @patch("cryton.lib.util.util.Rpc.wait_for_response", Mock())
+    def test_call(self):
+        self.rpc_obj.call("", {})
+
+    @patch("cryton.lib.util.util.time.sleep", Mock())
+    def test_wait_for_response(self):
+        self.rpc_obj.wait_for_response(0.2)
+
+    def test_on_response(self):
+        mock_msg = Mock()
+        mock_msg.correlation_id = "1"
+        mock_msg.json.return_value = {"test": "test"}
+        self.rpc_obj.correlation_id = "1"
+        self.rpc_obj.on_response(mock_msg)
+        self.assertEqual(self.rpc_obj.response, {"test": "test"})

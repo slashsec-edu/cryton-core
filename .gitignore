@@ -1,23 +1,12 @@
-__pycache__/
-*.py[cod]
-*$py.class
+# Development environment
 .idea/
-log/
-store.sqlite3
-build/
-dist/
-*.egg-info/
-uploads/
+.pytest_cache
+__pycache__
+*.egg-info
 
-.pybuild/
-package/debian/*.log
-package/debian/*.debhelper
-package/debian/*.substvars
-package/debian/cryton/
-package/debian/files
-*.build
-*.buildinfo
-*.changes
-*.dsc
-*.deb
-*.tar.gz
+# Tests coverage
+htmlcov
+.coverage
+
+# Runtime
+uploads

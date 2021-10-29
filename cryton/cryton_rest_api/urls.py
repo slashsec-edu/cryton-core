@@ -21,6 +21,7 @@ step_exec_router = router.register('step_executions', viewsets.StepExecutionView
 workers_router = router.register('workers', viewsets.WorkerViewset)
 template_router = router.register('templates', viewsets.PlanTemplateViewset)
 exec_vars_router = router.register('execution_variables', viewsets.ExecutionVariableViewset)
+logs_router = router.register('logs', viewsets.LogViewSet, "log")
 
 schema_view = get_schema_view(
     openapi.Info(

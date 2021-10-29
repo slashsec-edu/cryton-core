@@ -84,10 +84,11 @@ def get_session_ids(target_ip: str, plan_execution_id: Union[Type[int], int]) ->
     """
     logger.logger.debug("Getting session ids", target_ip=target_ip)
     worker_obj = worker.Worker(worker_model_id=PlanExecutionModel.objects.get(id=plan_execution_id).worker.id)
-    args = {'target_ip': target_ip}
+    event_info = {constants.EVENT_T: constants.EVENT_LIST_SESSIONS,
+                  constants.EVENT_V: {'target_ip': target_ip}}
 
     with util.Rpc() as worker_rpc:
-        resp = worker_rpc.call(worker_obj.control_q_name, constants.EVENT_LIST_SESSIONS, args)
+        resp = worker_rpc.call(worker_obj.control_q_name, event_info)
 
-    sess_list = resp.get('event_v').get('session_list')
+    sess_list = resp.get(constants.EVENT_V).get('session_list')
     return sess_list

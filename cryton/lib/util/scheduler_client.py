@@ -1,5 +1,4 @@
 from datetime import datetime
-import json
 
 from cryton.etc import config
 from cryton.lib.util.util import Rpc
@@ -27,13 +26,14 @@ def schedule_function(execute_function: callable, function_args: list, start_tim
             'function_args': function_args,
             'start_time': start_time.isoformat()
         }
+        event_info = {constants.EVENT_T: SCHEDULER_T,
+                      constants.EVENT_V: {constants.EVENT_ACTION: constants.ADD_JOB, "args": args}}
         logger.debug("Scheduling job", execute_function=execute_function)
 
-        resp = rpc.call(config.Q_CONTROL_REQUEST_NAME, SCHEDULER_T,
-                        {"event_v": {constants.EVENT_ACTION: constants.ADD_JOB, "args": args}})
+        resp = rpc.call(config.Q_CONTROL_REQUEST_NAME, event_info)
         if resp is None:
             logger.error("rpc timeouted")
-            return -1
+            return ""
         else:
             logger.debug("Got response", resp=resp)
             job_scheduled_id = resp.get(constants.RETURN_VALUE)
@@ -55,8 +55,9 @@ def schedule_repeating_function(execute_function: callable, seconds: int) -> str
             'execute_function': execute_function,
             'seconds': seconds,
         }
-        resp = rpc.call(config.Q_CONTROL_REQUEST_NAME, SCHEDULER_T,
-                        {'event_v': {constants.EVENT_ACTION: constants.ADD_REPEATING_JOB, 'args': args}})
+        event_info = {constants.EVENT_T: SCHEDULER_T,
+                      constants.EVENT_V: {constants.EVENT_ACTION: constants.ADD_REPEATING_JOB, 'args': args}}
+        resp = rpc.call(config.Q_CONTROL_REQUEST_NAME, event_info)
         job_scheduled_id = resp.get(constants.RETURN_VALUE)
 
     return job_scheduled_id
@@ -73,8 +74,9 @@ def remove_job(job_id: str) -> int:
         args = {
             'job_id': job_id
         }
-        rpc.call(config.Q_CONTROL_REQUEST_NAME, SCHEDULER_T,
-                 {'event_v': {constants.EVENT_ACTION: constants.REMOVE_JOB, 'args': args}})
+        event_info = {constants.EVENT_T: SCHEDULER_T,
+                      constants.EVENT_V: {constants.EVENT_ACTION: constants.REMOVE_JOB, 'args': args}}
+        rpc.call(config.Q_CONTROL_REQUEST_NAME, event_info)
 
     return 0
 
@@ -86,8 +88,9 @@ def health_check() -> bool:
     """
     rpc = Rpc()
     args = {}
-    resp = rpc.call(config.Q_CONTROL_REQUEST_NAME, SCHEDULER_T,
-                    {'event_v': {constants.EVENT_ACTION: constants.HEALTCHECK, 'args': args}})
+    event_info = {constants.EVENT_T: SCHEDULER_T,
+                  constants.EVENT_V: {constants.EVENT_ACTION: constants.EVENT_HEALTH_CHECK, 'args': args}}
+    resp = rpc.call(config.Q_CONTROL_REQUEST_NAME, event_info)
     health = resp.get('return_value')
     if health != 0:
         return False

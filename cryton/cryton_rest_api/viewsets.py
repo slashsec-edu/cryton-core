@@ -5,7 +5,8 @@ from datetime import datetime
 import pytz
 import jinja2
 import yaml
-from rest_framework.viewsets import ModelViewSet
+from django.http import QueryDict
+from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -31,7 +32,7 @@ from cryton.cryton_rest_api import (
     exceptions
 )
 
-from cryton.lib.util import creator, exceptions as core_exceptions, states, util
+from cryton.lib.util import creator, exceptions as core_exceptions, states, util, constants
 from cryton.lib.models import stage, plan, step, worker, run
 from cryton import settings as cryton_settings
 
@@ -83,17 +84,25 @@ def load_body_yaml(request) -> dict:
 
 
 def get_start_time(request) -> datetime:
+    time_zone = request.data.get('time_zone', 'utc')
     try:
         str_start_time = request.data['start_time']
     except KeyError:
         raise exceptions.ApiWrongOrMissingArgument(param_name='start_time', param_type=str)
 
-    time_zone = request.data.get('time_zone', 'utc')
     try:
-        start_time = datetime.strptime(str_start_time, '%Y-%m-%d %H:%M:%S')
+        start_time = datetime.strptime(str_start_time, constants.TIME_FORMAT)
+    except ValueError as f_ex:
+        try:
+            start_time = datetime.strptime(str_start_time, constants.TIME_FORMAT_DETAILED)
+        except ValueError as s_ex:
+            raise exceptions.ApiWrongOrMissingArgument(param_name='start_time', param_type='str',
+                                                       name=f"{f_ex}; {s_ex}")
+
+    try:
         start_time = util.convert_to_utc(start_time, time_zone)
-    except (ValueError, pytz.exceptions.UnknownTimeZoneError) as ex:
-        raise exceptions.ApiWrongOrMissingArgument(param_name='start_time', param_type='str', name=str(ex))
+    except pytz.exceptions.UnknownTimeZoneError as ex:
+        raise exceptions.ApiWrongOrMissingArgument(param_name='time_zone', param_type='str', name=str(ex))
 
     return start_time
 
@@ -173,11 +182,11 @@ class PlanViewSet(GeneralViewSet):
         ),
     })
 
-    # @filter_decorator
-    # def get_queryset(self):
-    #     queryset = self.queryset
-    #
-    #     return queryset
+    @filter_decorator
+    def get_queryset(self):
+        queryset = self.queryset
+
+        return queryset
 
     @swagger_auto_schema(operation_description="Create new Plan. You have to provide a whole JSON/YAML "
                                                "describing all Stages and Steps",
@@ -794,9 +803,9 @@ class RunViewSet(GeneralViewSet):
         run_model_id = kwargs.get("pk")
         run_obj = run.Run(run_model_id=run_model_id)
 
-        if run_obj.state not in states.RUN_EXECUTE_REST_STATES:
-            raise exceptions.ApiWrongObjectState('Run object in wrong state: {}, should be in: {}'
-                                                 .format(run_obj.state, states.RUN_EXECUTE_REST_STATES))
+        if run_obj.state not in states.RUN_EXECUTE_NOW_STATES:
+            raise exceptions.ApiWrongObjectState('Run object in wrong state: {}, must be in: {}'
+                                                 .format(run_obj.state, states.RUN_EXECUTE_NOW_STATES))
 
         try:
             run_obj.execute()
@@ -1161,11 +1170,87 @@ class PlanTemplateViewset(GeneralViewSet):
     queryset = PlanTemplateFileModel.objects.all()
     http_method_names = ["get", "post", "delete"]
 
+    response_get_template = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'template_model_id': openapi.Schema(name='template_model_id', type=openapi.TYPE_INTEGER),
+                    'template': openapi.Schema(name='template', type=openapi.TYPE_OBJECT)
+                }
+            )
+        }
+    )
+
+    response_update_template = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'template_model_id': openapi.Schema(name='template_model_id', type=openapi.TYPE_INTEGER)
+                }
+            )
+        }
+    )
+
+    response_detail = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_STRING)
+        }
+    )
+
     @filter_decorator
     def get_queryset(self):
         queryset = self.queryset
 
         return queryset
+
+    @swagger_auto_schema(operation_description="Get Template (its YAML).",
+                         responses={200: response_get_template, 500: response_detail, 400: response_detail})
+    @action(methods=["get"], detail=True)
+    def get_template(self, _, **kwargs):
+        template_id = kwargs.get("pk")
+        try:
+            plan_template_obj = PlanTemplateFileModel.objects.get(id=template_id)
+        except PlanTemplateFileModel.DoesNotExist:
+            raise exceptions.ApiObjectDoesNotExist(detail=f"Template with ID {template_id} does not exist.")
+
+        try:
+            with open(str(plan_template_obj.file.path), "r") as template_file:
+                plan_template = yaml.safe_load(template_file)
+        except IOError:
+            raise exceptions.ApiInternalError("Couldn't find the Template's file.")
+
+        msg = {"detail": {"template_model_id": template_id, "template": plan_template}}
+        return Response(msg, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(operation_description="Update Template using YAML.",
+                         responses={201: response_update_template, 500: response_detail, 400: response_detail})
+    @action(methods=["post"], detail=True)
+    def update_template(self, request, **kwargs):
+        template_id = kwargs.get("pk")
+        if type(request.data) == QueryDict:
+            new_data = request.data.dict()
+        else:
+            new_data = request.data
+
+        try:
+            plan_template_obj = PlanTemplateFileModel.objects.get(id=template_id)
+        except PlanTemplateFileModel.DoesNotExist:
+            raise exceptions.ApiObjectDoesNotExist(detail=f"Template with ID {template_id} does not exist.")
+
+        try:
+            with open(str(plan_template_obj.file.path), "w") as template_file:
+                yaml.safe_dump(new_data, template_file)
+        except IOError:
+            raise exceptions.ApiInternalError("Couldn't find the Template's file.")
+
+        msg = {"detail": {"template_model_id": template_id}}
+        return Response(msg, status=status.HTTP_201_CREATED)
 
 
 class ExecutionVariableViewset(GeneralViewSet):
@@ -1254,3 +1339,68 @@ class ExecutionVariableViewset(GeneralViewSet):
 
         msg = {'detail': str(created_exec_vars)}
         return Response(msg, status=status.HTTP_201_CREATED)
+
+
+class LogViewSet(ViewSet):
+    """
+        list:
+        List existing logs
+    """
+    http_method_names = ["get"]
+
+    response_ok = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            "count": openapi.Schema(type=openapi.TYPE_STRING),
+            "results": openapi.Schema(
+                type=openapi.TYPE_ARRAY,
+                items=openapi.TYPE_STRING
+            )
+        }
+    )
+
+    response_error = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_STRING)
+        }
+    )
+
+    parameters_list = [
+        openapi.Parameter("offset", openapi.IN_QUERY, type=openapi.TYPE_NUMBER),
+        openapi.Parameter("limit", openapi.IN_QUERY, type=openapi.TYPE_NUMBER),
+        openapi.Parameter("filter", openapi.IN_QUERY, type=openapi.TYPE_STRING)
+    ]
+
+    @swagger_auto_schema(operation_description="Get logs.", responses={200: response_ok, 500: response_error},
+                         manual_parameters=parameters_list)
+    def list(self, request):
+        filter_param = request.query_params.get("filter")
+        try:
+            offset = int(request.query_params.get("offset", 0))
+            limit = int(request.query_params.get("limit", 0))
+        except ValueError:
+            raise exceptions.ApiWrongFormat()
+
+        try:
+            all_logs = util.get_logs()
+        except (IOError, Exception) as ex:
+            raise exceptions.ApiInternalError(str(ex))
+
+        if filter_param is not None:
+            filtered_logs = []
+            for log in all_logs:
+                if filter_param in log:
+                    filtered_logs.append(log)
+        else:
+            filtered_logs = all_logs
+
+        filtered_logs_count = len(filtered_logs)
+        if limit > 0 or offset > 0:
+            logs_to_show = filtered_logs[offset:offset + limit if limit > 0 else filtered_logs_count]
+        else:
+            logs_to_show = filtered_logs
+
+        msg = {"count": filtered_logs_count, "results": logs_to_show}
+        return Response(msg, status=status.HTTP_200_OK)
