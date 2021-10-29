@@ -1,31 +1,29 @@
 from cryton.lib.util import exceptions
 
-# states
+
+# States
 PENDING = 'PENDING'
 SCHEDULED = 'SCHEDULED'
 RUNNING = 'RUNNING'
 PAUSING = 'PAUSING'
 PAUSED = 'PAUSED'
 FINISHED = 'FINISHED'
-IGNORE = 'IGNORE'
-UP = 'UP'
-DOWN = 'DOWN'
+IGNORED = 'IGNORED'
 ERROR = 'ERROR'
 WAITING = 'WAITING'
 TERMINATED = 'TERMINATED'
 AWAITING = 'AWAITING'
 
-# Final states
-STEP_FINAL_STATES = [FINISHED, IGNORE, ERROR, TERMINATED]
-STAGE_FINAL_STATES = [FINISHED, TERMINATED]
-PLAN_FINAL_STATES = [FINISHED, TERMINATED]
+UP = 'UP'
+DOWN = 'DOWN'
+
 
 # Worker related
-SLAVE_STATES = [
+WORKER_STATES = [
     UP, DOWN
 ]
 
-SLAVE_TRANSITIONS = [
+WORKER_TRANSITIONS = [
     (UP, DOWN), (DOWN, UP)
 ]
 
@@ -36,9 +34,12 @@ RUN_STATES = [
 ]
 
 RUN_TRANSITIONS = [
-    (PENDING, SCHEDULED), (SCHEDULED, PENDING), (PENDING, RUNNING), (SCHEDULED, RUNNING),
-    (RUNNING, PAUSING), (PAUSING, PAUSED), (PAUSED, RUNNING), (RUNNING, FINISHED), (RUNNING, TERMINATED),
-    (PAUSING, TERMINATED), (PAUSED, TERMINATED), (FINISHED, TERMINATED)
+    (PENDING, SCHEDULED), (PENDING, RUNNING),
+    (SCHEDULED, PENDING), (SCHEDULED, RUNNING),
+    (RUNNING, PAUSING), (RUNNING, FINISHED), (RUNNING, TERMINATED),
+    (PAUSING, PAUSED), (PAUSING, FINISHED), (PAUSING, TERMINATED),
+    (PAUSED, RUNNING), (PAUSED, TERMINATED),
+    (FINISHED, TERMINATED)  # TODO: is this ok?
 ]
 
 RUN_PREPARE_STATES = [PENDING]
@@ -47,22 +48,17 @@ RUN_UNSCHEDULE_STATES = [SCHEDULED]
 RUN_RESCHEDULE_STATES = [SCHEDULED]
 RUN_POSTPONE_STATES = [SCHEDULED]
 RUN_EXECUTE_STATES = [PENDING, SCHEDULED]
+RUN_EXECUTE_NOW_STATES = [PENDING]
 RUN_PAUSE_STATES = [RUNNING]
 RUN_UNPAUSE_STATES = [PAUSED]
-RUN_EXECUTE_REST_STATES = [PENDING]
-RUN_KILL_STATES = [RUNNING]
+RUN_KILL_STATES = [RUNNING, PAUSING, PAUSED]
 
+RUN_PLAN_PAUSE_STATES = [PENDING, PAUSED, FINISHED, TERMINATED]
 
-# Plan and PlanExecution related
-PLAN_STATES = [
-    PENDING, SCHEDULED, RUNNING, FINISHED, PAUSING, PAUSED, TERMINATED
-]
+# PlanExecution related
+PLAN_STATES = RUN_STATES
 
-PLAN_TRANSITIONS = [
-    (PENDING, SCHEDULED), (PENDING, RUNNING), (SCHEDULED, PENDING), (SCHEDULED, RUNNING), (RUNNING, FINISHED),
-    (RUNNING, PAUSING), (PAUSING, PAUSED), (PAUSED, RUNNING), (SCHEDULED, TERMINATED), (RUNNING, TERMINATED),
-    (PAUSING, TERMINATED), (PAUSED, TERMINATED), (FINISHED, TERMINATED)
-]
+PLAN_TRANSITIONS = RUN_TRANSITIONS
 
 PLAN_SCHEDULE_STATES = [PENDING]
 PLAN_EXECUTE_STATES = [PENDING]
@@ -71,20 +67,26 @@ PLAN_RESCHEDULE_STATES = [SCHEDULED]
 PLAN_POSTPONE_STATES = [SCHEDULED]
 PLAN_PAUSE_STATES = [RUNNING]
 PLAN_UNPAUSE_STATES = [PAUSED]
-PLAN_KILL_STATES = [SCHEDULED, RUNNING, PAUSING]
+PLAN_KILL_STATES = [RUNNING, PAUSING, PAUSED]
+PLAN_FINAL_STATES = [FINISHED, TERMINATED]
+
+PLAN_STAGE_PAUSE_STATES = [PENDING, PAUSED, FINISHED, TERMINATED, WAITING, AWAITING]
 
 
-# Stage and StageExecution related
+# StageExecution related
 STAGE_STATES = [
     PENDING, SCHEDULED, RUNNING, FINISHED, PAUSING, PAUSED, WAITING, TERMINATED, AWAITING
 ]
 
 STAGE_TRANSITIONS = [
-    (PENDING, SCHEDULED), (SCHEDULED, RUNNING), (RUNNING, FINISHED), (RUNNING, PAUSING), (PAUSING, PAUSED),
-    (PAUSED, RUNNING), (PAUSING, FINISHED), (PENDING, WAITING), (WAITING, RUNNING), (PAUSED, WAITING),
-    (WAITING, FINISHED), (PENDING, TERMINATED), (RUNNING, TERMINATED), (WAITING, TERMINATED), (PAUSING, TERMINATED),
-    (PAUSED, TERMINATED), (PENDING, AWAITING), (AWAITING, WAITING), (AWAITING, RUNNING), (AWAITING, TERMINATED),
-    (AWAITING, FINISHED), (SCHEDULED, PENDING), (SCHEDULED, TERMINATED), (SCHEDULED, WAITING), (FINISHED, TERMINATED)
+    (PENDING, SCHEDULED), (PENDING, WAITING), (PENDING, AWAITING),
+    (SCHEDULED, PENDING), (SCHEDULED, WAITING), (SCHEDULED, RUNNING),
+    (RUNNING, FINISHED), (RUNNING, PAUSING), (RUNNING, TERMINATED),
+    (PAUSING, FINISHED), (PAUSING, TERMINATED), (PAUSING, PAUSED),
+    (PAUSED, RUNNING), (PAUSED, TERMINATED),
+    (WAITING, RUNNING), (WAITING, TERMINATED), (WAITING, PAUSED),
+    (AWAITING, WAITING), (AWAITING, RUNNING), (AWAITING, TERMINATED), (AWAITING, PAUSED),
+    (FINISHED, TERMINATED)  # TODO: is this ok?
 ]
 
 STAGE_EXECUTE_STATES = [SCHEDULED, PAUSED, WAITING, AWAITING]
@@ -92,27 +94,27 @@ STAGE_SCHEDULE_STATES = [PENDING]
 STAGE_UNSCHEDULE_STATES = [SCHEDULED]
 STAGE_PAUSE_STATES = [RUNNING]
 STAGE_UNPAUSE_STATES = [PAUSED]
-STAGE_KILL_STATES = [PENDING, SCHEDULED, RUNNING, WAITING, PAUSING, AWAITING]
+STAGE_KILL_STATES = [RUNNING, PAUSING, PAUSED, WAITING, AWAITING]
+STAGE_FINAL_STATES = [FINISHED, TERMINATED]
 
-# Step and StepExecution related
+
+# StepExecution related
 STEP_STATES = [
-    PENDING, RUNNING, FINISHED, IGNORE, PAUSED
+    PENDING, RUNNING, FINISHED, IGNORED, PAUSED, TERMINATED, ERROR
 ]
 
 STEP_TRANSITIONS = [
-    (PENDING, RUNNING), (PENDING, IGNORE), (RUNNING, FINISHED), (RUNNING, ERROR), (PENDING, ERROR),
-    (PENDING, PAUSED), (PAUSED, RUNNING)
+    (PENDING, RUNNING), (PENDING, IGNORED), (PENDING, PAUSED),
+    (RUNNING, FINISHED), (RUNNING, TERMINATED), (RUNNING, ERROR),
+    (PAUSED, RUNNING), (PAUSED, TERMINATED)
 ]
 
 STEP_EXECUTE_STATES = [PENDING, PAUSED]
-STEP_KILL_STATES = [RUNNING]
-
+STEP_KILL_STATES = [RUNNING, PAUSED]
+STEP_FINAL_STATES = [FINISHED, IGNORED, TERMINATED, ERROR]
 
 # Successor related
 VALID_SUCCESSOR_STATES = [FINISHED]
-
-
-WORKER_STATES = [UP, DOWN, ERROR]
 
 
 class StateMachine:
@@ -126,7 +128,7 @@ class StateMachine:
         self.valid_states: list = valid_states
         self.valid_transitions: list = valid_transitions
 
-    def check_transition_validity(self, state_from: str, state_to: str) -> bool:
+    def _check_transition_validity(self, state_from: str, state_to: str) -> bool:
         """
         Check if the transition is valid
         :param state_from: from what state will be the transition made
@@ -155,7 +157,7 @@ class StateMachine:
 
         return True
 
-    def check_valid_state(self, state, valid_states):
+    def _check_valid_state(self, state, valid_states):
         """
         Check if the state is in valid states, if valid_states are empty don't check
         :param state: state to check
@@ -188,7 +190,7 @@ class RunStateMachine(StateMachine):
         :return: True if transition is valid, False if transition is duplicate
         """
         try:
-            return self.check_transition_validity(state_from, state_to)
+            return self._check_transition_validity(state_from, state_to)
         except exceptions.StateTransitionError as e:
             raise exceptions.RunStateTransitionError(
                 e.message.get('message'), self.execution_id, state_from, state_to, RUN_TRANSITIONS
@@ -208,7 +210,7 @@ class RunStateMachine(StateMachine):
         :return: None
         """
         try:
-            return self.check_valid_state(state, valid_states)
+            return self._check_valid_state(state, valid_states)
         except exceptions.InvalidStateError:
             raise exceptions.RunInvalidStateError(
                 "Desired action cannot be performed due to Run's incorrect state.", self.execution_id, state,
@@ -232,7 +234,7 @@ class PlanStateMachine(StateMachine):
         :return: True if transition is valid, False if transition is duplicate
         """
         try:
-            return self.check_transition_validity(state_from, state_to)
+            return self._check_transition_validity(state_from, state_to)
         except exceptions.StateTransitionError as e:
             raise exceptions.PlanStateTransitionError(
                 e.message.get('message'), self.execution_id, state_from, state_to, PLAN_TRANSITIONS
@@ -252,7 +254,7 @@ class PlanStateMachine(StateMachine):
         :return: None
         """
         try:
-            return self.check_valid_state(state, valid_states)
+            return self._check_valid_state(state, valid_states)
         except exceptions.InvalidStateError:
             raise exceptions.PlanInvalidStateError(
                 "Desired action cannot be performed due to PlanExecution's incorrect state.", self.execution_id, state,
@@ -276,7 +278,7 @@ class StageStateMachine(StateMachine):
         :return: True if transition is valid, False if transition is duplicate
         """
         try:
-            return self.check_transition_validity(state_from, state_to)
+            return self._check_transition_validity(state_from, state_to)
         except exceptions.StateTransitionError as e:
             raise exceptions.StageStateTransitionError(
                 e.message.get('message'), self.execution_id, state_from, state_to, STAGE_TRANSITIONS
@@ -296,7 +298,7 @@ class StageStateMachine(StateMachine):
         :return: None
         """
         try:
-            return self.check_valid_state(state, valid_states)
+            return self._check_valid_state(state, valid_states)
         except exceptions.InvalidStateError:
             raise exceptions.StageInvalidStateError(
                 "Desired action cannot be performed due to StageExecution's incorrect state.", self.execution_id, state,
@@ -320,7 +322,7 @@ class StepStateMachine(StateMachine):
         :return: True if transition is valid, False if transition is duplicate
         """
         try:
-            return self.check_transition_validity(state_from, state_to)
+            return self._check_transition_validity(state_from, state_to)
         except exceptions.StateTransitionError as e:
             raise exceptions.StepStateTransitionError(
                 e.message.get('message'), self.execution_id, state_from, state_to, STEP_TRANSITIONS
@@ -340,7 +342,7 @@ class StepStateMachine(StateMachine):
         :return: None
         """
         try:
-            return self.check_valid_state(state, valid_states)
+            return self._check_valid_state(state, valid_states)
         except exceptions.InvalidStateError:
             raise exceptions.StepInvalidStateError(
                 "Desired action cannot be performed due to StepExecution's incorrect state.", self.execution_id, state,

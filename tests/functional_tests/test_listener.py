@@ -127,7 +127,7 @@ class TestListener(TestCase):
         self.assertIn("stepexecution finished", cm.output[0])
 
         self.assertEqual(step_exec_obj_1.state, states.FINISHED)
-        self.assertEqual(step_exec_obj_2.state, states.IGNORE)
+        self.assertEqual(step_exec_obj_2.state, states.IGNORED)
         self.assertEqual(stage_exec_obj.state, states.FINISHED)
         self.assertEqual(plan_exec_obj.state, states.FINISHED)
 

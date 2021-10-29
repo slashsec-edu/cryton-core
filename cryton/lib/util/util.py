@@ -4,9 +4,9 @@ import json
 import base64
 import time
 from threading import Thread
-from functools import reduce
+from functools import reduce, partial
 import copy
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Optional
 from datetime import datetime, timedelta
 import uuid
 import configparser
@@ -16,10 +16,7 @@ import jinja2
 import re
 import yaml
 
-from cryton.cryton_rest_api.models import (
-    WorkerModel,
-    CorrelationEvent
-)
+from cryton.cryton_rest_api.models import WorkerModel
 from cryton.etc import config
 from cryton.lib.util import exceptions, logger, constants
 from cryton.lib.models import worker
@@ -62,31 +59,6 @@ def rabbit_prepare_queue(queue_name: str) -> None:
     channel.close()
 
 
-def rabbit_send_msg(rabbit_channel: amqpstorm.Channel, queue_name: str, msg: str, step_execution_id: int,
-                    reply_to: str, properties: dict = None) -> str:
-    """
-
-    :param rabbit_channel: Rabbit channel
-    :param queue_name: Queue name
-    :param msg: Message to be sent
-    :param step_execution_id: Event identification (eg. stepex id)
-    :param reply_to: Queue name to reply to
-    :param properties: optional channel properties in form of dict
-    :return: Message Correlation ID
-    """
-    correlation_id = uuid.uuid4().hex
-    CorrelationEvent.objects.create(correlation_id=correlation_id,
-                                    step_execution_id=step_execution_id,
-                                    worker_q_name=queue_name)
-
-    if properties is None:
-        properties = dict()
-    properties.update(correlation_id=correlation_id, reply_to=reply_to)
-    rabbit_channel.basic.publish(exchange="", routing_key=queue_name, body=msg, properties=properties)
-
-    return correlation_id
-
-
 def rabbit_send_oneway_msg(queue_name: str, msg: str) -> None:
     """
 
@@ -102,38 +74,6 @@ def rabbit_send_oneway_msg(queue_name: str, msg: str) -> None:
     connection.close()
 
     return None
-
-
-def execute_attack_module(rabbit_channel: amqpstorm.Channel,
-                          attack_module: str,
-                          attack_module_arguments: dict,
-                          worker_model: WorkerModel,
-                          step_execution_id: int,
-                          executor: str = None) -> str:
-    """
-    Executes attack module remotely over gRPC.
-
-    :param rabbit_channel: Rabbit channel
-    :param attack_module: Attack module string (dot notation, eg: modules.infrastructure.mod_nmap
-    :param attack_module_arguments: Arguments in form o dictionary
-    :param worker_model: WorkerModel object
-    :param step_execution_id:
-    :param executor: Executor address (address:port or address), if desired.
-    :return: correlation_id of the sent message
-    """
-
-    worker_q_name = worker.Worker(worker_model_id=worker_model.id).attack_q_name
-    body = {
-        'attack_module': attack_module,
-        'attack_module_arguments': attack_module_arguments,
-        'executor': executor
-    }
-    body_s = json.dumps(body)
-    reply_to = config.Q_ATTACK_RESPONSE_NAME
-
-    correlation_id = rabbit_send_msg(rabbit_channel, worker_q_name, body_s, step_execution_id, reply_to)
-
-    return correlation_id
 
 
 def rm_path(persist_path: str) -> None:
@@ -252,11 +192,12 @@ def validate_attack_module_args(
     """
 
     worker_q_name = worker.Worker(worker_model_id=worker_model.id).control_q_name
-    event_v = {"event_v": {"attack_module": module_name, "attack_module_arguments": module_args}}
+    event_info = {constants.EVENT_T: constants.EVENT_VALIDATE_MODULE,
+                  constants.EVENT_V: {"attack_module": module_name, "attack_module_arguments": module_args}}
     with Rpc() as rpc:
-        resp = rpc.call(worker_q_name, constants.EVENT_VALIDATE_MODULE, event_v)
+        resp = rpc.call(worker_q_name, event_info)
 
-    return int(resp.get("event_v").get(constants.RETURN_CODE)) == 0
+    return int(resp.get(constants.EVENT_V).get(constants.RETURN_CODE)) == 0
 
 
 def convert_to_utc(original_datetime: datetime, time_zone: str = 'utc', offset_aware: bool = False) -> datetime:
@@ -694,17 +635,18 @@ def rename_key(in_dict, rename_from, rename_to):
     add_key(in_dict, rename_to, new_val)
 
 
-class Rpc(object):
-    def __init__(self):
+class Rpc:
+    def __init__(self, channel: Optional[amqpstorm.Channel] = None):
         """
-
-        :return:
+        RPC client.
+        :param channel: Existing RabbitMQ channel
         """
-        self.channel = None
+        self.channel = channel
         self.response = None
         self.connection = None
-        self.callback_queue = None
+        self.queue_name = str(uuid.uuid1())
         self.correlation_id = None
+
         self.open()
 
     def __enter__(self):
@@ -713,53 +655,78 @@ class Rpc(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def open(self):
-        self.connection = rabbit_connection()
+    def open(self) -> None:
+        """
+        Setup queue and channel, optionally create new connection.
+        :return: None
+        """
+        if self.channel is None:  # Create new connection and channel if not given.
+            self.connection = rabbit_connection()
+            self.channel = self.connection.channel()
 
-        self.channel = self.connection.channel()
+        self.channel.queue.declare(queue=self.queue_name)
+        self.channel.basic.consume(self.on_response, no_ack=True, queue=self.queue_name)
 
-        resp_q_name = str(uuid.uuid4())
-        self.channel.queue.declare(queue=resp_q_name, exclusive=False)
-        self.callback_queue = resp_q_name
+    def close(self) -> None:
+        """
+        Clean up channel, optionally close created connection.
+        :return: None
+        """
+        self.channel.queue.delete(self.queue_name)
 
-        self.channel.basic.consume(self.on_response, no_ack=True,
-                                   queue=self.callback_queue)
+        if self.connection is not None:  # Stop channel and connection only if created new one was created.
+            self.channel.stop_consuming()
+            self.channel.close()
+            self.connection.close()
 
-    def close(self):
-        self.channel.queue.delete(queue=self.callback_queue)
-        self.channel.stop_consuming()
-        self.channel.close()
-        self.connection.close()
+    def call(self, queue_name: str, msg_body: dict, time_limit: float = config.CRYTON_RPC_TIMEOUT,
+             reply_queue: str = None) -> dict:
+        """
+        Create RPC call and wait for response.
+        :param queue_name: Target RabbitMQ queue
+        :param msg_body: Message contents
+        :param time_limit: Time limit for response
+        :param reply_queue: Custom queue to send the reply to (moves self.queue to msg_body["ack_queue"]
+        and is used for message acknowledgment)
+        :return: Call's response
+        """
+        if reply_queue is not None:  # Update message content and reply_queue.
+            msg_body.update({constants.ACK_QUEUE: self.queue_name})
+        else:
+            reply_queue = self.queue_name
 
-    def call(self, q_name, method_name, method_args=None,
-             time_limit: float = config.CRYTON_RPC_TIMEOUT) -> dict:
-        if not method_args:
-            method_args = {}
+        msg_body = json.dumps(msg_body)  # Create send and process message.
+        message = Message.create(self.channel, msg_body)
+        message.reply_to = reply_queue
 
-        msg = {'event_t': method_name,
-               **method_args}
-        msg_json = json.dumps(msg)
-
-        message = Message.create(self.channel, body=msg_json)
-        message.reply_to = self.callback_queue
         self.correlation_id = message.correlation_id
-        message.publish(routing_key=q_name)
+        message.publish(queue_name)
 
-        check = time_limit
-        self.channel.process_data_events()
-        while not self.response:
-            self.channel.process_data_events()
-            check -= 1
-            time.sleep(1)
-            if check <= 0:
-                break
-        self.channel.queue.delete(self.callback_queue)
+        self.wait_for_response(time_limit)
         return self.response
 
-    def on_response(self, message):
-        if self.correlation_id != message.correlation_id:
-            return
-        self.response = json.loads(message.body)
+    def wait_for_response(self, time_limit: float, sleep_time: float = 0.2) -> None:
+        """
+        Wait for response.
+        :param time_limit: Time limit for response
+        :param sleep_time: Duration between response checks
+        :return: None
+        """
+        while not self.response:
+            if time_limit <= 0:
+                break
+            self.channel.process_data_events()
+            time_limit -= sleep_time
+            time.sleep(sleep_time)
+
+    def on_response(self, message: Message) -> None:
+        """
+        Save response for correct message.
+        :param message: Received RabbitMQ message
+        :return: None
+        """
+        if self.correlation_id == message.correlation_id or self.correlation_id == message.json().get("correlation_id"):
+            self.response = message.json()
 
 
 def send_response(message: Message, response: str) -> None:
@@ -790,3 +757,17 @@ def send_response(message: Message, response: str) -> None:
     logger.logger.info("message sent", response=response, reply_to=message.reply_to)
 
     message.ack()
+
+
+def get_logs() -> list:
+    """
+    Retrieve logs from log file.
+    :return: Parsed Logs
+    """
+    if config.LOGGER == 'prod':
+        log_file_path = config.LOG_FILE_PATH
+    else:
+        log_file_path = config.LOG_FILE_PATH_DEBUG
+
+    with open(log_file_path, "r") as log_file:
+        return [log.rstrip(", \n") for log in log_file]

@@ -1,7 +1,7 @@
 version: '3'
 services:
   cryton_db:
-    image: postgres
+    image: postgres:13
     restart: always
     container_name: "cryton_db"
     environment:
@@ -15,7 +15,7 @@ services:
     env_file:
       - .env
   cryton_pgbouncer:
-    image: edoburu/pgbouncer:1.8.1
+    image: edoburu/pgbouncer:1.15.0
     restart: always
     container_name: "cryton_pgbouncer"
     depends_on:
@@ -51,7 +51,7 @@ services:
       - .env
   cryton_rabbit:
     hostname: cryton_rabbit
-    image: rabbitmq:3.8.5-management
+    image: rabbitmq:3.9-management
     restart: always
     container_name: "cryton_rabbit"
     env_file:
@@ -98,6 +98,7 @@ services:
       - .env
 
   apache:
+    restart: always
     hostname: cryton
     container_name: cryton_apache
     build:
@@ -105,6 +106,6 @@ services:
       dockerfile: docker_files/Dockerfile-apache
     image: cryton_apache
     ports:
-      - "127.0.0.1:$CRYTON_PUBLIC_PORT:80"
+      - "$CRYTON_PUBLIC_PORT:80"
     env_file:
       - .env

@@ -108,6 +108,7 @@ class StageExecutionModel(ExecutionModel):
     stage_model = models.ForeignKey(StageModel, on_delete=models.CASCADE, related_name='stage_executions')
     aps_job_id = models.TextField(default=None, null=True)
     schedule_time = models.DateTimeField(blank=True, null=True)
+    trigger_id = models.TextField(default=None, null=True)
 
     class Meta:
         db_table = 'stage_execution'

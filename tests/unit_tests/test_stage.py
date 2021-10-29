@@ -302,6 +302,12 @@ class TestStageExecute(TestCase):
 
         self.assertEqual(self.stage_ex_obj.finish_time, test_time)
 
+    def test_property_trigger_id(self):
+        test_trigger_id = "test_id"
+        self.stage_ex_obj.trigger_id = test_trigger_id
+
+        self.assertEqual(self.stage_ex_obj.trigger_id, test_trigger_id)
+
     def test_filter_without_param(self):
         stage_ex_model1 = baker.make(StageExecutionModel, state="test1")
         stage_ex_model2 = baker.make(StageExecutionModel, state="test2")
@@ -425,27 +431,29 @@ class TestStageExecute(TestCase):
         schedule_time.return_value = timezone.now()
         schedule_function.return_value = '1'
         with self.assertLogs('cryton-debug', level='INFO') as cm:
-            trigger_delta.TriggerDelta(stage_execution_id=self.stage_ex_obj.model.id).schedule()
+            trigger_delta.TriggerDelta(self.stage_ex_obj).schedule()
 
         self.assertIn("stagexecution scheduled", cm.output[0])
         self.assertEqual(self.stage_ex_obj.aps_job_id, '1')
 
     def test_schedule_not_delta(self):
         stage_ex_model = baker.make(StageExecutionModel)
+        stage_ex = stage.StageExecution(stage_execution_id=stage_ex_model.id)
 
         with self.assertRaises(exceptions.UnexpectedValue):
-            trigger_delta.TriggerDelta(stage_execution_id=stage_ex_model.id).schedule()
+            trigger_delta.TriggerDelta(stage_ex).schedule()
 
     @patch('cryton.lib.triggers.trigger_delta.scheduler_client.remove_job', MagicMock)
     def test_unschedule(self):
         self.stage_ex_obj.aps_job_id = '1'
         with self.assertLogs('cryton-debug', level='INFO') as cm:
-            trigger_delta.TriggerDelta(stage_execution_id=self.stage_ex_obj.model.id).unschedule()
+            trigger_delta.TriggerDelta(self.stage_ex_obj).unschedule()
 
         self.assertIn("stagexecution unscheduled", cm.output[0])
         self.assertEqual(self.stage_ex_obj.aps_job_id, None)
 
     @patch('cryton.lib.models.step.StepExecution.kill', Mock())
+    @patch('cryton.lib.models.stage.StageExecution.trigger', Mock())
     def test_kill(self):
         stage_ex_model = baker.make(StageExecutionModel, **{'state': 'RUNNING'})
         baker.make(StepExecutionModel, **{'state': 'RUNNING', 'stage_execution': stage_ex_model})
@@ -456,6 +464,7 @@ class TestStageExecute(TestCase):
         self.assertEqual(stage_ex.state, 'TERMINATED')
 
     @patch('cryton.lib.triggers.trigger_delta.TriggerDelta.unschedule', Mock())
+    @patch('cryton.lib.models.stage.StageExecution.trigger', Mock())
     def test_kill_scheduled(self):
         stage_ex_model = baker.make(
             StageExecutionModel, **{'state': 'PENDING', 'schedule_time': timezone.now(), 'stage_model':
@@ -466,6 +475,7 @@ class TestStageExecute(TestCase):
             stage_ex.kill()
         self.assertEqual(stage_ex.state, 'TERMINATED')
 
+    @patch('cryton.lib.models.stage.StageExecution.trigger', Mock())
     def test_kill_waiting(self):
         stage_ex_model = baker.make(StageExecutionModel, **{'state': 'WAITING'})
         stage_ex = stage.StageExecution(stage_execution_id=stage_ex_model.id)

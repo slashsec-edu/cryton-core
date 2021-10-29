@@ -18,9 +18,6 @@ from cryton.etc import config
 
 from cryton.lib.util import constants as co, exceptions, logger, scheduler_client, states as st, util
 from cryton.lib.models import worker
-from cryton.lib.triggers import (
-    triggers
-)
 from cryton.lib.models.stage import StageExecution, Stage
 from django.utils import timezone
 
@@ -253,73 +250,65 @@ class PlanExecution:
 
         os.makedirs(execution_evidence_dir, exist_ok=True)
         self.evidence_dir = execution_evidence_dir
-        return None
 
-    def schedule(self, schedule_time: datetime) -> str:
+    def schedule(self, schedule_time: datetime) -> None:
         """
         Schedule all plan's stages.
-
         :param schedule_time: Time to schedule to
-        :return: Job ID
+        :return: None
+        :raises
+            :exception RuntimeError
         """
         # Check state
         logger.logger.debug("Scheduling Plan", plan_id=self.model.plan_model_id)
         st.PlanStateMachine(self.model.id).validate_state(self.state, st.PLAN_SCHEDULE_STATES)
-        self.schedule_time = schedule_time
 
         self.aps_job_id = scheduler_client.schedule_function("cryton.lib.models.plan:execution", [self.model.id],
                                                              schedule_time)
 
-        self.state = st.SCHEDULED
-        logger.logger.info("planexecution scheduled", plan_name=self.model.run.plan_model.name, status='success')
-
-        return self.aps_job_id
+        if isinstance(self.aps_job_id, str):
+            self.schedule_time = schedule_time.replace(tzinfo=timezone.utc)
+            self.state = st.SCHEDULED
+            logger.logger.info("planexecution scheduled", plan_name=self.model.plan_model.name, status='success')
+        else:
+            raise RuntimeError("Could not schedule planexecution")
 
     def execute(self) -> None:
         """
-        Execute Plan. This method schedules Stages and starts triggers.
-
+        Execute Plan. This method starts triggers.
         :return: None
         """
         logger.logger.debug("Executing Plan", plan_id=self.model.plan_model_id)
         st.PlanStateMachine(self.model.id).validate_state(self.state, st.PLAN_EXECUTE_STATES)
 
         self.start_time = timezone.now()
-        self.__generate_evidence_dir()
+        self.state = st.RUNNING
 
+        self.__generate_evidence_dir()
         # Prepare rabbit queue
         queue_name = worker.Worker(worker_model_id=self.model.worker_id).attack_q_name
         util.rabbit_prepare_queue(queue_name)
 
         # Start triggers
         self.start_triggers()
-        self.state = st.RUNNING
-
-        logger.logger.info("planexecution executed", plan_name=self.model.run.plan_model.name, status='success')
+        logger.logger.info("planexecution executed", plan_name=self.model.plan_model.name, status='success')
 
     def unschedule(self) -> None:
         """
         Unschedule plan execution.
-
         :return: None
         """
         logger.logger.debug("Unscheduling Plan", plan_id=self.model.plan_model_id)
         st.PlanStateMachine(self.model.id).validate_state(self.state, st.PLAN_UNSCHEDULE_STATES)
-        for stage_execution_id in self.model.stage_executions.values_list('id', flat=True):
-            stage_execution = StageExecution(stage_execution_id=stage_execution_id)
-            if stage_execution.model.stage_model.trigger_type == co.DELTA:
-                # Get class from Enum
-                triggers.TriggerType[co.DELTA].value(stage_execution_id=stage_execution_id).unschedule()
-                # stage_execution.unschedule()
 
+        scheduler_client.remove_job(self.aps_job_id)
+        self.aps_job_id, self.schedule_time = None, None
         self.state = st.PENDING
-        self.schedule_time = None
-        logger.logger.info("planexecution unscheduled", plan_name=self.model.run.plan_model.name, status='success')
+        logger.logger.info("planexecution unscheduled", plan_name=self.model.plan_model.name, status='success')
 
     def reschedule(self, new_time: datetime) -> None:
         """
         Reschedule plan execution.
-
         :param new_time: Time to reschedule to
         :raises UserInputError: when provided time < present
         :return: None
@@ -332,12 +321,11 @@ class PlanExecution:
 
         self.unschedule()
         self.schedule(new_time)
-        logger.logger.info("planexecution rescheduled", plan_name=self.model.run.plan_model.name, status='success')
+        logger.logger.info("planexecution rescheduled", plan_name=self.model.plan_model.name, status='success')
 
     def postpone(self, delta: str):
         """
         Postpone plan execution.
-
         :param delta: Time to postpone by, in [int]h[int]m[int]s format
         :raises UserInputError: when provided delta is in incorrect format
         :return: None
@@ -352,55 +340,49 @@ class PlanExecution:
 
         self.unschedule()
         self.schedule(schedule_time)
-        logger.logger.info("planexecution postponed", plan_name=self.model.run.plan_model.name, status='success')
+        logger.logger.info("planexecution postponed", plan_name=self.model.plan_model.name, status='success')
 
     def pause(self) -> None:
         """
         Pause plan execution.
-
         :return: None
         """
         logger.logger.debug("Pausing Plan", plan_id=self.model.plan_model_id)
-        # Change state to PAUSING
         st.PlanStateMachine(self.model.id).validate_state(self.state, st.PLAN_PAUSE_STATES)
+
         self.state = st.PAUSING
-        logger.logger.info("planexecution pausing", plan_name=self.model.run.plan_model.name, status='success')
+        logger.logger.info("planexecution pausing", plan_name=self.model.plan_model.name, status='success')
 
-        # PAUSE stages
-        for stage_execution_id in self.model.stage_executions.values_list('id', flat=True):
-            if StageExecution(stage_execution_id=stage_execution_id).model.stage_model.trigger_type == co.DELTA:
-                triggers.TriggerType[co.DELTA].value(stage_execution_id=stage_execution_id).pause()
-                # StageExecution(stage_execution_id=stage_execution_id).pause()
+        for stage_ex in self.model.stage_executions.all():  # Pause StageExecutions.
+            StageExecution(stage_execution_id=stage_ex.id).trigger.pause()
 
-        # If all stages have been unscheduled (due to pausing), set PAUSED state
-        if not self.model.stage_executions.filter(state__in=[st.RUNNING, st.PAUSING, st.SCHEDULED]).exists():
-            logger.logger.info("planexecution paused", plan_name=self.model.run.plan_model.name, status='success')
+        if not self.model.stage_executions.exclude(state__in=st.PLAN_STAGE_PAUSE_STATES).exists():
             self.state = st.PAUSED
             self.pause_time = timezone.now()
-
-        return None
+            logger.logger.info("planexecution paused", plan_name=self.model.plan_model.name, status='success')
 
     def unpause(self) -> None:
         logger.logger.debug("Unpausing Plan", plan_id=self.model.plan_model_id)
         st.PlanStateMachine(self.model.id).validate_state(self.state, st.PLAN_UNPAUSE_STATES)
 
-        for stage_execution_id in self.model.stage_executions.values_list('id', flat=True):
-            stage_execution = StageExecution(stage_execution_id=stage_execution_id)
-            delta_trigger = triggers.TriggerType[co.DELTA].value
-            if stage_execution.state in st.STAGE_SCHEDULE_STATES:
-                delta_trigger(stage_execution_id=stage_execution_id).schedule()
-            elif stage_execution.state in [st.PAUSED, st.PAUSING]:
-                delta_trigger(stage_execution_id=stage_execution_id).unpause()
-
-        self.state = st.RUNNING
         self.pause_time = None
+        self.state = st.RUNNING
+
+        for stage_execution_model in self.model.stage_executions.all():
+            stage_ex = StageExecution(stage_execution_id=stage_execution_model.id)
+            if stage_ex.model.stage_model.trigger_type == co.DELTA and stage_ex.state in st.STAGE_SCHEDULE_STATES:
+                stage_ex.trigger.schedule()
+            else:
+                try:
+                    stage_ex.trigger.unpause()
+                except exceptions.StageInvalidStateError:
+                    pass
+
         logger.logger.info("Plan unpaused", plan_id=self.model.plan_model_id)
-        return None
 
     def validate_modules(self):
         """
         For each stage validate if worker is up, all modules are present and module args are correct.
-
         """
         logger.logger.debug("Plan modules validation started", plan_id=self.model.plan_model_id)
 
@@ -455,16 +437,11 @@ class PlanExecution:
         :return: None
         """
         logger.logger.debug("Starting triggers", plan_id=self.model.plan_model_id)
-        # Schedule Stages
-        for stage_execution_id in self.model.stage_executions.values_list('id', flat=True):
-            stage_execution = StageExecution(stage_execution_id=stage_execution_id)
-            stage_model = stage_execution.model.stage_model
-
-            trigger_class = triggers.TriggerType[stage_model.trigger_type].value
-            trigger_class(stage_execution_id=stage_execution_id).start()
-            logger.logger.debug("Trigger started", plan_id=self.model.plan_model_id, trigger=str(trigger_class))
-
-            # Add other trigger types here
+        for stage_execution_model in self.model.stage_executions.all():
+            stage_execution = StageExecution(stage_execution_id=stage_execution_model.id)
+            stage_execution.trigger.start()
+            logger.logger.debug("Trigger started", plan_id=self.model.plan_model_id,
+                                trigger=str(stage_execution.trigger))
         logger.logger.info("triggers started", plan_name=self.model.run.plan_model.name, status='success')
 
     def stop_triggers(self) -> None:
@@ -475,9 +452,10 @@ class PlanExecution:
         """
         logger.logger.debug("Stopping triggers", plan_id=self.model.plan_model_id)
         for stage_execution_model in self.model.stage_executions.all():
-            trigger_class = triggers.TriggerType[stage_execution_model.stage_model.trigger_type].value
-            trigger_class(stage_execution_id=stage_execution_model.id).stop()
-            logger.logger.debug("Trigger stopped", plan_id=self.model.plan_model_id, trigger=str(trigger_class))
+            stage_execution = StageExecution(stage_execution_id=stage_execution_model.id)
+            stage_execution.trigger.stop()
+            logger.logger.debug("Trigger stopped", plan_id=self.model.plan_model_id,
+                                trigger=str(stage_execution.trigger))
         logger.logger.info("triggers stopped", plan_name=self.model.run.plan_model.name, status='success')
 
     @staticmethod
@@ -520,22 +498,23 @@ class PlanExecution:
         logger.logger.debug("Killing Plan", plan_id=self.model.plan_model_id)
         st.PlanStateMachine(self.model.id).validate_state(self.state, st.PLAN_KILL_STATES)
 
-        if self.state in st.PLAN_UNSCHEDULE_STATES:
-            self.unschedule()
+        processes = list()
+        for stage_ex_model in self.model.stage_executions.filter(state__in=st.STAGE_KILL_STATES):
+            stage_ex = StageExecution(stage_execution_id=stage_ex_model.id)
+            process = Process(target=stage_ex.kill)
+            processes.append(process)
 
-        else:
-            processes = list()
-            for stage_ex_obj in self.model.stage_executions.filter(state__in=st.STAGE_KILL_STATES):
-                stage_ex = StageExecution(stage_execution_id=stage_ex_obj.id)
-                process = Process(target=stage_ex.kill)
-                processes.append(process)
+        for stage_ex_model in self.model.stage_executions.filter(state__in=st.STAGE_UNSCHEDULE_STATES):
+            stage_ex = StageExecution(stage_execution_id=stage_ex_model.id)
+            process = Process(target=stage_ex.trigger.stop)
+            processes.append(process)
 
-            connections.close_all()  # close connections to force each process to create its own
-            for process in processes:
-                process.start()
+        connections.close_all()  # close connections to force each process to create its own
+        for process in processes:
+            process.start()
 
-            for process in processes:
-                process.join()
+        for process in processes:
+            process.join()
 
         self.state = st.TERMINATED
         logger.logger.info("planexecution killed", plan_execution_id=self.model.id,

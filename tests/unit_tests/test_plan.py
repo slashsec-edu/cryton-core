@@ -21,7 +21,7 @@ from cryton.cryton_rest_api.models import (
 )
 
 from cryton.lib.triggers import (
-    trigger_http_listener
+    trigger_http
 )
 
 @patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
@@ -180,19 +180,19 @@ class PlanExecutionTest(TestCase):
         self.assertEqual(self.pex_obj.state, "RUNNING")
 
     def test_start_time_property(self):
-        time = datetime(3000, 12, 12, 10, 10, 10)
+        time = datetime(3000, 12, 12, 10, 10, 10, tzinfo=timezone.utc)
 
         self.pex_obj.start_time = time
         self.assertEqual(self.pex_obj.start_time, time)
 
     def test_pause_time_property(self):
-        time = datetime(3000, 12, 12, 10, 10, 10)
+        time = datetime(3000, 12, 12, 10, 10, 10, tzinfo=timezone.utc)
 
         self.pex_obj.pause_time = time
         self.assertEqual(self.pex_obj.pause_time, time)
 
     def test_finish_time_property(self):
-        time = datetime(3000, 12, 12, 10, 10, 10)
+        time = datetime(3000, 12, 12, 10, 10, 10, tzinfo=timezone.utc)
 
         self.pex_obj.finish_time = time
         self.assertEqual(self.pex_obj.finish_time, time)
@@ -223,10 +223,10 @@ class PlanExecutionTest(TestCase):
         plan_execution = plan.PlanExecution(plan_execution_id=stage_execution_model.plan_execution.id)
 
         with self.assertLogs('cryton-debug', level='INFO') as cm:
-            plan_execution.schedule(datetime(3000, 12, 12, 10, 0, 0))
+            plan_execution.schedule(datetime(3000, 12, 12, 10, 0, 0, tzinfo=timezone.utc))
 
         self.assertEqual(plan_execution.state, "SCHEDULED")
-        self.assertEqual(plan_execution.schedule_time, datetime(3000, 12, 12, 10, 0, 0))
+        self.assertEqual(plan_execution.schedule_time, datetime(3000, 12, 12, 10, 0, 0, tzinfo=timezone.utc))
         self.assertIn("planexecution scheduled", cm.output[0])
 
     @patch("cryton.lib.models.plan.PlanExecution.start_triggers")
@@ -307,8 +307,8 @@ class PlanExecutionTest(TestCase):
 
         self.assertIn("invalid state detected", cm.output[0])
 
-    @patch("cryton.lib.triggers.trigger_delta.TriggerDelta.unschedule")
-    def test_unschedule(self, mock_unschedule_stage):
+    @patch("cryton.lib.models.plan.scheduler_client.remove_job")
+    def test_unschedule(self, mock_schedule):
         plan_execution_model = baker.make(PlanExecutionModel, state="SCHEDULED",
                                           stage_executions=[baker.make(StageExecutionModel,
                                                                        stage_model=baker.make(StageModel,
@@ -319,7 +319,7 @@ class PlanExecutionTest(TestCase):
             plan_execution.unschedule()
 
         self.assertEqual(plan_execution.state, "PENDING")
-        mock_unschedule_stage.assert_called_once()
+        mock_schedule.assert_called_once()
         self.assertIn("planexecution unscheduled", cm.output[0])
 
     def test_unschedule_invalid_state(self):
@@ -340,12 +340,12 @@ class PlanExecutionTest(TestCase):
         with self.assertLogs('cryton-debug', level='INFO') as cm:
             plan_execution.postpone("1h1m1s")
         mock_schedule_plan.assert_called_once()
-        mock_schedule_plan.assert_called_with(datetime(3000, 12, 12, 11, 1, 1))
+        mock_schedule_plan.assert_called_with(datetime(3000, 12, 12, 11, 1, 1, tzinfo=timezone.utc))
         mock_unschedule_plan.assert_called_once()
         self.assertIn("planexecution postponed", cm.output[0])
 
     def test_postpone_invalid(self):
-        plan_execution_model = baker.make(PlanExecutionModel, start_time="3000-12-12 10:00:00Z", state="SCHEDULED")
+        plan_execution_model = baker.make(PlanExecutionModel, start_time="3000-12-12T10:00:00Z", state="SCHEDULED")
         plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
 
         with self.assertRaises(exceptions.UserInputError), self.assertLogs('cryton-debug', level='ERROR'):
@@ -371,9 +371,9 @@ class PlanExecutionTest(TestCase):
         plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
 
         with self.assertLogs('cryton-debug', level='INFO') as cm:
-            plan_execution.reschedule(datetime(3000, 12, 12, 11, 1, 1))
+            plan_execution.reschedule(datetime(3000, 12, 12, 11, 1, 1, tzinfo=timezone.utc))
 
-        mock_schedule_plan.assert_called_with(datetime(3000, 12, 12, 11, 1, 1))
+        mock_schedule_plan.assert_called_with(datetime(3000, 12, 12, 11, 1, 1, tzinfo=timezone.utc))
         mock_unschedule_plan.assert_called_once()
         self.assertIn("planexecution rescheduled", cm.output[0])
 
@@ -382,7 +382,7 @@ class PlanExecutionTest(TestCase):
         plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
 
         with self.assertRaises(exceptions.UserInputError), self.assertLogs('cryton-debug', level='ERROR'):
-            plan_execution.reschedule(datetime(1990, 12, 12, 11, 1, 1))
+            plan_execution.reschedule(datetime(1990, 12, 12, 11, 1, 1, tzinfo=timezone.utc))
 
     @patch("cryton.lib.models.plan.PlanExecution.schedule", Mock())
     @patch("cryton.lib.models.plan.PlanExecution.unschedule", Mock())
@@ -445,7 +445,7 @@ class PlanExecutionTest(TestCase):
     @patch('cryton.lib.models.plan.datetime')
     @patch("cryton.lib.triggers.trigger_delta.TriggerDelta.unpause")
     def test_unpause_stage(self, mock_stage_unpause, mock_utcnow):
-        mock_utcnow.now.return_value = datetime(3000, 12, 12, 10, 0, 0)
+        mock_utcnow.now.return_value = datetime(3000, 12, 12, 10, 0, 0, tzinfo=timezone.utc)
         stage_execution_model = baker.make(StageExecutionModel, state="PAUSED",
                                            stage_model=baker.make(StageModel, trigger_type="delta",
                                                                   trigger_args={})
@@ -583,7 +583,7 @@ class PlanExecutionTest(TestCase):
         plan_execution_model = baker.make(PlanExecutionModel, stage_executions=[stage_execution_model])
         plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
         # ._PlanExecution__start_http_listener = mock_start_http_listener
-        trigger_http_listener.TriggerHTTPListener.start = mock_start_http_listener
+        trigger_http.TriggerHTTP.start = mock_start_http_listener
         # expected_args = {"plan_execution_id": plan_execution_model.id, "stage_id": stage_execution_model.stage_model.id}
 
         plan_execution.start_triggers()
@@ -599,7 +599,7 @@ class PlanExecutionTest(TestCase):
         plan_execution_model = baker.make(PlanExecutionModel, stage_executions=[stage_execution_model])
         plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
         # plan_execution._PlanExecution__stop_http_listeners = mock_stop_http_listeners
-        trigger_http_listener.TriggerHTTPListener.stop = mock_stop_http_listeners
+        trigger_http.TriggerHTTP.stop = mock_stop_http_listeners
         plan_execution.stop_triggers()
 
         mock_stop_http_listeners.assert_called_once()
@@ -672,15 +672,6 @@ class PlanExecutionTest(TestCase):
     def test_kill(self):
         plan_execution_model = baker.make(PlanExecutionModel, **{'state': 'RUNNING'})
         baker.make(StageExecutionModel, **{'state': 'RUNNING', 'plan_execution': plan_execution_model})
-        plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
-
-        with self.assertLogs('cryton-debug', level='INFO'):
-            plan_execution.kill()
-        self.assertEqual(plan_execution.state, 'TERMINATED')
-
-    @patch('cryton.lib.models.plan.PlanExecution.unschedule', Mock())
-    def test_kill_scheduled(self):
-        plan_execution_model = baker.make(PlanExecutionModel, **{'state': 'SCHEDULED'})
         plan_execution = plan.PlanExecution(plan_execution_id=plan_execution_model.id)
 
         with self.assertLogs('cryton-debug', level='INFO'):

@@ -2,7 +2,7 @@ from django.test import TestCase
 from mock import patch, MagicMock, Mock
 
 from cryton.lib.util import constants, exceptions, logger, states
-from cryton.lib.models import step
+from cryton.lib.models import step, worker
 
 from cryton.cryton_rest_api.models import (
     PlanModel,
@@ -280,8 +280,8 @@ class TestStepAdvanced(TestCase):
 
         step_ex_obj_par.ignore()
 
-        self.assertEqual(step_ex_obj_par.state, states.IGNORE)
-        self.assertEqual(step_ex_obj_succ.state, states.IGNORE)
+        self.assertEqual(step_ex_obj_par.state, states.IGNORED)
+        self.assertEqual(step_ex_obj_succ.state, states.IGNORED)
 
     def test_ignore_adv(self):
         self.step_obj.add_successor(self.step_succ_1.model.id, 'std_out', 'r"test"')
@@ -303,15 +303,15 @@ class TestStepAdvanced(TestCase):
         step_ex_obj_succ_1.result = constants.RESULT_OK
         step_ex_obj_succ_2.ignore()
 
-        self.assertNotEqual(step_ex_obj_succ_2.state, states.IGNORE)
+        self.assertNotEqual(step_ex_obj_succ_2.state, states.IGNORED)
 
         step_ex_obj_par.state = states.RUNNING
         step_ex_obj_par.state = states.FINISHED
 
         step_ex_obj_succ_2.ignore()
 
-        self.assertEqual(step_ex_obj_succ_2.state, states.IGNORE)
-        self.assertNotEqual(step_ex_obj_succ_3.state, states.IGNORE)
+        self.assertEqual(step_ex_obj_succ_2.state, states.IGNORED)
+        self.assertNotEqual(step_ex_obj_succ_3.state, states.IGNORED)
 
     def test_ignore_successors(self):
         self.step_obj.add_successor(self.step_succ_1.model.id, 'std_out', 'r"test"')
@@ -335,9 +335,9 @@ class TestStepAdvanced(TestCase):
         step_ex_obj_par.state = states.FINISHED
         step_ex_obj_par.ignore_successors()
 
-        self.assertEqual(step_ex_obj_succ_1.state, states.IGNORE)
-        self.assertEqual(step_ex_obj_succ_2.state, states.IGNORE)
-        self.assertEqual(step_ex_obj_succ_3.state, states.IGNORE)
+        self.assertEqual(step_ex_obj_succ_1.state, states.IGNORED)
+        self.assertEqual(step_ex_obj_succ_2.state, states.IGNORED)
+        self.assertEqual(step_ex_obj_succ_3.state, states.IGNORED)
 
     @patch('cryton.lib.models.step.StepExecution.execute')
     def test_execute_successors(self, mock_execute):
@@ -365,7 +365,7 @@ class TestStepAdvanced(TestCase):
         step_ex_obj_par.ignore_successors()
 
         mock_execute.assert_called_with()
-        self.assertEqual(step_ex_obj_succ_2.state, states.IGNORE)
+        self.assertEqual(step_ex_obj_succ_2.state, states.IGNORED)
         self.assertEqual(step_ex_obj_succ_3.state, states.PENDING)
 
 
@@ -524,6 +524,17 @@ class TestStepExecution(TestCase):
 
         self.assertEqual(len(step_exec_stats_obj.get_successors()), 0)
 
+    @patch("cryton.lib.models.step.CorrelationEvent.objects.create", Mock())
+    @patch('cryton.lib.util.util.Rpc.__enter__')
+    def test__execute_attack_module(self, mock_rpc_enter):
+        mock_rpc = Mock()
+        mock_rpc.call.return_value = Mock(return_value=1)
+        mock_rpc.correlation_id = "1"
+        mock_rpc_enter.return_value = mock_rpc
+        worker_model_obj = baker.make(worker.WorkerModel)
+        ret = self.step_exec_stats_obj._execute_attack_module(Mock(), "test", {}, worker_model_obj)
+        self.assertEqual(ret, "1")
+
 
 @patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-debug'))
 @patch('cryton.lib.util.states.StepStateMachine.validate_transition', MagicMock())
@@ -533,7 +544,7 @@ class TestStepExecution(TestCase):
 class TestStepExecute(TestCase):
 
     def setUp(self) -> None:
-        self.mock_execute_attack_module = patch('cryton.lib.models.step.util.execute_attack_module').start()
+        self.mock_execute_attack_module = patch('cryton.lib.models.step.StepExecution._execute_attack_module').start()
         self.mock_evidence_file = patch('cryton.lib.util.util.store_evidence_file').start()
         self.mock_get_msf_session = patch('cryton.lib.models.session.get_msf_session_id').start()
         self.mock_get_session_ids = patch('cryton.lib.models.session.get_session_ids').start()
@@ -570,7 +581,7 @@ class TestStepExecute(TestCase):
         # self.assertEqual(self.step_exec_stats_obj.model.result, 'OK')
         self.assertIn("stepexecution executed", cm.output[0])
 
-    @patch('cryton.lib.util.util.execute_attack_module', MagicMock(side_effect=exceptions.RabbitConnectionError('test')))
+    @patch('cryton.lib.models.step.StepExecution._execute_attack_module', MagicMock(side_effect=exceptions.RabbitConnectionError('test')))
     def test_execute_no_connection(self):
         rabbit_channel = MagicMock()
         self.mock_step_init.return_value = step.Step(step_model_id=self.step_model_obj.id)
@@ -729,7 +740,7 @@ class TestStepExecute(TestCase):
         self.assertIsInstance(report_dict, dict)
         self.assertEqual(report_dict.get('evidence_file'), 'test_evidence_file')
 
-    @patch('cryton.lib.models.step.util.execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
     def test_mod_out_sharing_custom(self, mock_exec):
         rabbit_channel = MagicMock()
         self.mock_step_init.stop()
@@ -763,15 +774,10 @@ class TestStepExecute(TestCase):
 
         step_exec.execute(rabbit_channel)
 
-        mock_exec.assert_called_with(
-            rabbit_channel=rabbit_channel,
-            attack_module=step_obj.attack_module,
-            attack_module_arguments=expected_result,
-            worker_model=self.stage_execution.plan_execution.worker,
-            step_execution_id=step_exec.model.id,
-            executor=step_obj.model.executor)
+        mock_exec.assert_called_with(rabbit_channel, step_obj.attack_module, expected_result,
+                                     self.stage_execution.plan_execution.worker, step_obj.model.executor)
 
-    @patch('cryton.lib.models.step.util.execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
     def test_mod_out_sharing_parent_and_custom(self, mock_exec):
         rabbit_channel = MagicMock()
         self.mock_step_init.stop()
@@ -806,13 +812,8 @@ class TestStepExecute(TestCase):
 
         step_exec.execute(rabbit_channel)
 
-        mock_exec.assert_called_with(
-            rabbit_channel=rabbit_channel,
-            attack_module=step_obj.attack_module,
-            attack_module_arguments=expected_result,
-            worker_model=self.stage_execution.plan_execution.worker,
-            step_execution_id=step_exec.model.id,
-            executor=step_obj.model.executor)
+        mock_exec.assert_called_with(rabbit_channel, step_obj.attack_module, expected_result,
+                                     self.stage_execution.plan_execution.worker, step_obj.model.executor)
 
     @patch('cryton.lib.util.util.Rpc.__enter__')
     def test_kill(self, mock_rpc):

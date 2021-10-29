@@ -20,7 +20,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 import os
 
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, mock_open
 
 import json
 import yaml
@@ -498,7 +498,7 @@ class RestRunTest(APITestCase):
 
         # correct state
         self.run_obj.state = states.PENDING
-        args.update({"start_time": timezone.now().strftime('%Y-%m-%d %H:%M:%S')})
+        args.update({"start_time": timezone.now().strftime('%Y-%m-%dT%H:%M:%SZ')})
 
         response = self.client.post(reverse("runmodel-schedule", kwargs={"pk": self.run_obj.model.id}),
                                     args,
@@ -533,7 +533,7 @@ class RestRunTest(APITestCase):
 
         # correct state
         self.run_obj.state = states.SCHEDULED
-        args.update({"start_time": timezone.now().strftime('%Y-%m-%d %H:%M:%S')})
+        args.update({"start_time": timezone.now().strftime('%Y-%m-%dT%H:%M:%SZ')})
 
         response = self.client.post(reverse("runmodel-reschedule", kwargs={"pk": self.run_obj.model.id}),
                                     args,
@@ -690,8 +690,9 @@ class RestRunTest(APITestCase):
         self.assertEqual(plan_id, plan_obj.model.id)
 
         # schedule
-        schedule_time_dt = datetime.datetime.strptime("2050-10-11 09:11:47", '%Y-%m-%d %H:%M:%S')
-        args = {"start_time": "2050-10-11 09:11:47",
+        schedule_time_dt = datetime.datetime.strptime("2050-10-11T09:11:47Z", '%Y-%m-%dT%H:%M:%SZ')\
+            .replace(tzinfo=timezone.utc)
+        args = {"start_time": "2050-10-11T09:11:47Z",
                 "worker": "worker1"}
         response = self.client.post(reverse("runmodel-schedule", kwargs={"pk": self.run_obj.model.id}),
                                     args,
@@ -700,8 +701,9 @@ class RestRunTest(APITestCase):
         self.assertEqual(self.run_obj.schedule_time, schedule_time_dt)
 
         # reschedule
-        schedule_time_dt = datetime.datetime.strptime("2040-10-11 09:11:47", '%Y-%m-%d %H:%M:%S')
-        args = {"start_time": "2040-10-11 09:11:47"}
+        schedule_time_dt = datetime.datetime.strptime("2040-10-11T09:11:47Z", '%Y-%m-%dT%H:%M:%SZ')\
+            .replace(tzinfo=timezone.utc)
+        args = {"start_time": "2040-10-11T09:11:47Z"}
         response = self.client.post(reverse("runmodel-reschedule", kwargs={"pk": self.run_obj.model.id}),
                                     args,
                                     content_type="application/json"
@@ -820,6 +822,57 @@ class RestFilesTest(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertIsInstance(response.data.get('id'), int)
         self.assertTrue(PlanTemplateFileModel.objects.filter(id=response.data.get('id')).exists())
+
+    @patch("cryton.cryton_rest_api.viewsets.open", mock_open(read_data=""))
+    def test_get_template(self):
+        template_obj = PlanTemplateFileModel(file=TESTS_DIR + "/plan-template.yaml")
+        template_obj.save()
+
+        response = self.client.get(reverse("plantemplatefilemodel-get-template", kwargs={"pk": template_obj.id}))
+        self.assertEqual(response.status_code, 200)
+
+    @patch("cryton.cryton_rest_api.viewsets.open", mock_open(read_data=""))
+    def test_update_template(self):
+        template_obj = PlanTemplateFileModel(file=TESTS_DIR + "/p-template.yaml")
+        template_obj.save()
+
+        response = self.client.post(reverse("plantemplatefilemodel-update-template",
+                                            kwargs={"pk": template_obj.id}), {})
+        self.assertEqual(response.status_code, 201)
+
+
+@patch("sys.stdout", devnull)
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
+class RestLogsTest(APITestCase):
+
+    def setUp(self):
+        self.logs = ["log1-1", "log1-2", "log2-1"]
+        self.client = Client()
+
+    @patch("cryton.lib.util.util.open", mock_open(read_data="log1-1 \nlog1-2 \nlog2-1 \n"))
+    def test_list_all(self):
+        response = self.client.get(reverse("log-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data.get("results"), self.logs)
+        self.assertEqual(response.data.get("count"), 3)
+
+    @patch("cryton.lib.util.util.get_logs")
+    def test_list_error(self, mock_logs):
+        mock_logs.side_effect = IOError()
+        response = self.client.get(reverse("log-list"))
+        self.assertEqual(response.status_code, 500)
+
+    @patch("cryton.lib.util.util.open", mock_open(read_data="log1-1 \nlog1-2 \nlog2-1 \n"))
+    def test_list_pagination(self):
+        response = self.client.get(reverse("log-list"), {'offset': '1', 'limit': '2'})
+        self.assertEqual(response.data.get("results"), self.logs[1:3])
+        # self.assertEqual(response.data.get("count"), 3)  # TODO: should return 3, however `reverse` breaks it
+
+    @patch("cryton.lib.util.util.open", mock_open(read_data="log1-1 \nlog1-2 \nlog2-1 \n"))
+    def test_list_filter(self):
+        response = self.client.get(reverse("log-list"), {'filter': 'log1'})
+        self.assertEqual(response.data.get("results"), self.logs[0:2])
+        self.assertEqual(response.data.get("count"), 2)
 
 
 class FilteringTest(APITestCase):

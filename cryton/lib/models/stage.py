@@ -17,11 +17,9 @@ from cryton.cryton_rest_api.models import (
     DependencyModel
 )
 
-from cryton.lib.util import constants as co, exceptions, logger, states as st, util
+from cryton.lib.util import exceptions, logger, states as st, util
 
-from cryton.lib.triggers import (
-    triggers,
-)
+from cryton.lib.triggers import TriggerType, TriggerDelta, TriggerHTTP, TriggerMSF
 
 from cryton.lib.models.step import (
     StepExecution,
@@ -183,7 +181,7 @@ class Stage:
         """
         conf_schema = Schema({
             'name': str,
-            'trigger_type': Or(*[trigger.name for trigger in list(triggers.TriggerType)]),
+            'trigger_type': Or(*[trigger.name for trigger in list(TriggerType)]),
             'trigger_args': dict,
             'steps': list,
             SchemaOptional('depends_on'): list
@@ -195,7 +193,7 @@ class Stage:
         except SchemaError as ex:
             raise exceptions.StageValidationError(ex, stage_name=stage_dict.get('name'))
 
-        trigger = triggers.TriggerType[stage_dict.get('trigger_type')].value
+        trigger = TriggerType[stage_dict.get('trigger_type')].value
         arg_schema = trigger.arg_schema
         try:
             arg_schema.validate(stage_dict.get('trigger_args'))
@@ -354,12 +352,24 @@ class StageExecution:
         model.save()
 
     @property
-    def all_steps_finished(self) -> bool:
-        # Check if any steps are unfinished
-        cond = StepExecutionModel.objects.filter(stage_execution_id=self.model.id) \
-            .exclude(state__in=st.STEP_FINAL_STATES).exists()
+    def trigger_id(self) -> Optional[str]:
+        return self.model.trigger_id
 
-        return not cond
+    @trigger_id.setter
+    def trigger_id(self, value: Optional[str]):
+        model = self.model
+        model.trigger_id = value
+        model.save()
+
+    @property
+    def trigger(self) -> Union[TriggerDelta, TriggerHTTP, TriggerMSF]:
+        trigger_type = self.model.stage_model.trigger_type
+        return TriggerType[trigger_type].value(stage_execution=self)
+
+    @property
+    def all_steps_finished(self) -> bool:
+        # Check if any step is not in final state
+        return not self.model.step_executions.exclude(state__in=st.STEP_FINAL_STATES).exists()
 
     @property
     def all_dependencies_finished(self) -> bool:
@@ -386,53 +396,49 @@ class StageExecution:
 
     def execute(self) -> None:
         """
-        Create engine, nest it with Steps and execute it. If you want to replay Stage, create new StageExecution
+        Check if all requirements for execution are met, get init steps and execute them.
         :return: None
         """
         logger.logger.debug("Executing Stage", stage_id=self.model.stage_model_id)
         st.StageStateMachine(self.model.id).validate_state(self.state, st.STAGE_EXECUTE_STATES)
 
-        # Stop the execution if dependencies aren't finished
+        # Stop the execution if dependencies aren't finished.
         if not self.all_dependencies_finished:
-            if self.state != st.WAITING:
-                self.state = st.WAITING
-            return None
+            self.state = st.WAITING
+            return
 
         # Get initial Steps in Stage
-        init_steps = self.model.stage_model.steps.filter(is_init=True)
-        step_exec_list = list()
-        for step_model in init_steps:
-            # TODO make sure there is only one - this should not happen
-            try:
-                step_exec_model = StepExecutionModel.objects.get(step_model=step_model,
-                                                                 stage_execution_id=self.model.id,
-                                                                 state=st.PENDING)
-            except django_exc.MultipleObjectsReturned as ex:
-                logger.logger.warn(str(ex))
-                raise RuntimeError(ex)
-            step_exec_list.append(StepExecution(step_execution_id=step_exec_model.id))
+        step_executions = []
+        for step_ex_model in self.model.step_executions.filter(state=st.PENDING, step_model__is_init=True):
+            step_executions.append(StepExecution(step_execution_id=step_ex_model.id))
 
-        # Prepare processes and evenly distribute executions into processes
-        step_exec_lists = list(util.split_into_lists(step_exec_list, config.CRYTON_CPU_CORES))
+        # Pause waiting and awaiting StageExecutions if PlanExecution isn't running.
+        if self.state in [st.WAITING, st.AWAITING] and self.model.plan_execution.state != st.RUNNING:
+            self.pause_time = timezone.now()
+            self.state = st.PAUSED
+            for step_ex in step_executions:
+                step_ex.state = st.PAUSED
+            return
+
+        # Update state and time
+        if self.start_time is None:
+            self.start_time = timezone.now()
+        self.state = st.RUNNING
+
+        # Evenly distribute StepExecutions into processes.
+        step_exec_lists = list(util.split_into_lists(step_executions, config.CRYTON_CPU_CORES))
         processes = []
-        for step_exec_list in step_exec_lists:
-            if step_exec_list:
-                processes.append(Process(target=util.run_executions_in_threads, args=(step_exec_list,)))
+        for step_executions in step_exec_lists:
+            if step_executions:
+                processes.append(Process(target=util.run_executions_in_threads, args=(step_executions,)))
 
         # Close django db connections and run processes
         connections.close_all()
         for process in processes:
             process.start()
 
-        # Update state and time
-        self.state = st.RUNNING
-        if self.start_time is None:
-            self.start_time = timezone.now()
-
         logger.logger.info("stagexecution executed", stage_execution_id=self.model.id,
                            stage_name=self.model.stage_model.name, status='success')
-
-        return None
 
     def validate_modules(self) -> None:
         """
@@ -446,8 +452,8 @@ class StageExecution:
 
     def report(self) -> dict:
         report_obj = StageReport(id=self.model.id, stage_name=self.model.stage_model.name, state=self.state,
-                    schedule_time=self.schedule_time, start_time=self.start_time,
-                    finish_time=self.finish_time, pause_time=self.pause_time, step_executions=[])
+                                 schedule_time=self.schedule_time, start_time=self.start_time,
+                                 finish_time=self.finish_time, pause_time=self.pause_time, step_executions=[])
 
         for step_execution_obj in StepExecutionModel.objects.filter(stage_execution_id=self.model.id).order_by('id'):
             step_ex_report = StepExecution(step_execution_id=step_execution_obj.id).report()
@@ -457,25 +463,22 @@ class StageExecution:
 
     def kill(self) -> None:
         """
-        Kill current StageExecution and its StepExecutions
+        Kill current StageExecution and its StepExecutions.
         :return: None
         """
         logger.logger.debug("Killing Stage", stage_id=self.model.stage_model_id)
         st.StageStateMachine(self.model.id).validate_state(self.state, st.STAGE_KILL_STATES)
 
-        if self.state in [st.WAITING, st.PENDING]:
+        if self.state in [st.AWAITING]:
+            self.trigger.stop()
+
+        elif self.state in [st.WAITING]:
             pass
-
-        elif self.state == st.SCHEDULED and self.model.stage_model.trigger_type == co.DELTA:
-            triggers.TriggerType[co.DELTA].value(stage_execution_id=self.model.id).stop()
-
-        elif self.state == st.AWAITING and self.model.stage_model.trigger_type == co.HTTP_LISTENER:
-            triggers.TriggerType[co.HTTP_LISTENER].value(stage_execution_id=self.model.id).stop()
 
         else:
             threads = list()
-            for step_ex_obj in self.model.step_executions.filter(state__in=st.STEP_KILL_STATES):
-                step_ex = StepExecution(step_execution_id=step_ex_obj.id)
+            for step_ex_model in self.model.step_executions.filter(state__in=st.STEP_KILL_STATES):
+                step_ex = StepExecution(step_execution_id=step_ex_model.id)
                 thread = Thread(target=step_ex.kill)
                 threads.append(thread)
 
@@ -488,8 +491,6 @@ class StageExecution:
         self.state = st.TERMINATED
         logger.logger.info("stagexecution killed", stage_execution_id=self.model.id,
                            stage_name=self.model.stage_model.name, status='success')
-
-        return None
 
     def execute_subjects_to_dependency(self) -> None:
         """
@@ -504,8 +505,6 @@ class StageExecution:
         for subject_to_ex in subject_to_exs:
             subject_to_ex_obj = StageExecution(stage_execution_id=subject_to_ex.id)
             Thread(target=subject_to_ex_obj.execute).run()
-
-        return None
 
 
 def execution(execution_id: int) -> None:

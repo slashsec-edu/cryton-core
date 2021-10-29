@@ -13,14 +13,10 @@ from django.utils import timezone
 import amqpstorm
 from schema import Schema, Optional as SchemaOptional, SchemaError
 
-from cryton.cryton_rest_api.models import (
-    StepModel,
-    StepExecutionModel,
-    SuccessorModel,
-    ExecutionVariableModel,
-    OutputMapping
-)
+from cryton.cryton_rest_api.models import StepModel, StepExecutionModel, SuccessorModel, ExecutionVariableModel, \
+    OutputMapping, CorrelationEvent, WorkerModel
 
+from cryton.etc import config
 from cryton.lib.util import constants, exceptions, logger, states, util
 from cryton.lib.models import worker, session
 
@@ -515,6 +511,10 @@ class StepExecution:
         plan_execution_id = self.model.stage_execution.plan_execution_id
         step_worker_obj = self.model.stage_execution.plan_execution.worker
 
+        # Set RUNNING state
+        self.start_time = timezone.now()
+        self.state = states.RUNNING
+
         # Check if any session should be used
         use_named_session = step_obj.attack_module_args.get(constants.USE_NAMED_SESSION)
         use_any_session_to_target = step_obj.attack_module_args.get(constants.USE_ANY_SESSION_TO_TARGET)
@@ -566,18 +566,10 @@ class StepExecution:
         if session_msf_id is not None:
             mod_args.update({constants.SESSION_ID: session_msf_id})
 
-        # Set RUNNING state
-        self.start_time = timezone.now()
-        self.state = states.RUNNING
-
         # Execute Attack module
         try:
-            correlation_id = util.execute_attack_module(rabbit_channel=rabbit_channel,
-                                                        attack_module=step_obj.attack_module,
-                                                        attack_module_arguments=mod_args,
-                                                        worker_model=step_worker_obj,
-                                                        step_execution_id=self.model.id,
-                                                        executor=step_obj.model.executor)
+            correlation_id = self._execute_attack_module(rabbit_channel, step_obj.attack_module, mod_args,
+                                                         step_worker_obj, step_obj.model.executor)
         except exceptions.RabbitConnectionError as ex:
             logger.logger.error("Step could not be executed due to connection error: {}".format(ex))
             self.state = states.ERROR
@@ -596,6 +588,36 @@ class StepExecution:
                                 std_err=self.std_err, evidence_file=self.evidence_file, valid=self.valid)
 
         return asdict(report_obj)
+
+    def _execute_attack_module(self, rabbit_channel: amqpstorm.Channel, attack_module: str,
+                               attack_module_arguments: dict, worker_model: WorkerModel, executor: str = None) -> str:
+        """
+        Sends RPC request to execute attack module using RabbitMQ.
+
+        :param rabbit_channel: Rabbit channel
+        :param attack_module: Attack module string (dot notation, eg: modules.infrastructure.mod_nmap
+        :param attack_module_arguments: Arguments in form o dictionary
+        :param worker_model: WorkerModel object
+        :param executor: Executor address (address:port or address), if desired.
+        :return: correlation_id of the sent message
+        """
+        message_body = {
+            "attack_module": attack_module,
+            "attack_module_arguments": attack_module_arguments,
+            # "executor": executor
+        }
+        target_queue = worker.Worker(worker_model_id=worker_model.id).attack_q_name
+
+        with util.Rpc(rabbit_channel) as rpc:
+            response = rpc.call(target_queue, message_body, 10, config.Q_ATTACK_RESPONSE_NAME)
+            if response is None:
+                raise exceptions.RabbitConnectionError("No response from Worker.")
+            correlation_id = rpc.correlation_id
+
+        CorrelationEvent.objects.create(correlation_id=correlation_id,
+                                        step_execution_id=self.model.id,
+                                        worker_q_name=target_queue)
+        return correlation_id
 
     def get_regex_sucessors(self) -> QuerySet:
         """
@@ -671,7 +693,7 @@ class StepExecution:
         """
         logger.logger.debug("Ignoring Step", step_id=self.model.step_model_id)
         # Stop recursion
-        if self.state == states.IGNORE:
+        if self.state == states.IGNORED:
             return None
         # If any non SKIPPED parent exists (ignoring the one that called ignore())
         for par_step in Step(step_model_id=self.model.step_model.id).parents:
@@ -680,7 +702,7 @@ class StepExecution:
             if step_exec_obj.state not in states.STEP_FINAL_STATES:
                 return None
         # Set ignore state
-        self.state = states.IGNORE
+        self.state = states.IGNORED
         # Execute for all successors
         for succ_step in Step(step_model_id=self.model.step_model.id).successors:
             step_ex_id = StepExecutionModel.objects.get(step_model=succ_step,
@@ -796,10 +818,11 @@ class StepExecution:
         states.StepStateMachine(self.model.id).validate_state(self.state, states.STEP_KILL_STATES)
         worker_obj = worker.Worker(worker_model_id=self.model.stage_execution.plan_execution.worker.id)
         correlation_id = self.model.correlation_events.first().correlation_id
-        args = {"event_v": {"correlation_id": correlation_id}}
+        event_info = {constants.EVENT_T: constants.EVENT_KILL_STEP_EXECUTION,
+                      constants.EVENT_V: {"correlation_id": correlation_id}}
 
         with util.Rpc() as worker_rpc:
-            resp = worker_rpc.call(worker_obj.control_q_name, constants.EVENT_KILL_STEP_EXECUTION, args)
+            resp = worker_rpc.call(worker_obj.control_q_name, event_info)
 
         resp_dict = resp.get('event_v')
 

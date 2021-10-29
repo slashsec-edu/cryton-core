@@ -264,6 +264,7 @@ class ListenerTest(TestCase):
 
         mock_process_event.assert_called_with(event.Event('TYPE', 'VALUE'))
 
+    @patch('cryton.lib.models.stage.StageExecution.trigger', Mock())
     def test_handle_finished(self):
         worker_obj = baker.make(worker.WorkerModel)
         plan_model_obj = plan.Plan()

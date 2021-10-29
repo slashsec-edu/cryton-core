@@ -7,9 +7,6 @@ import amqpstorm
 
 from cryton.lib.util import constants, logger, states, util, exceptions
 from cryton.lib.models import stage, plan, step, run, event
-from cryton.lib.triggers import (
-    triggers
-)
 from cryton.etc import config
 
 from cryton.cryton_rest_api.models import (
@@ -181,7 +178,8 @@ class Listener:
         self._listeners.update({proc_listener: process})
         return None
 
-    def handle_paused(self, step_exec_obj: step.StepExecution) -> None:
+    @staticmethod
+    def handle_paused(step_exec_obj: step.StepExecution) -> None:
         """
         Check for PAUSED states.
         :param step_exec_obj: StepExecution object to check
@@ -189,23 +187,22 @@ class Listener:
         """
         logger.logger.info("Handling Step pause", step_execution_id=step_exec_obj.model.id)
         stage_exec_obj = stage.StageExecution(stage_execution_id=step_exec_obj.model.stage_execution_id)
-        stage_exec_obj.state = states.PAUSED
-        stage_exec_obj.pause_time = timezone.now()
-        # PAUSE all successors so they can be executed after UNPAUSE
-        step_exec_obj.pause_successors()
-        logger.logger.info("stageexecution paused", stage_execution_id=stage_exec_obj.model.id)
-        if not stage.StageExecutionModel.objects.filter(
-                plan_execution_id=stage_exec_obj.model.plan_execution_id,
-                state__in=[states.RUNNING, states.PAUSING, states.SCHEDULED]).exists():
+        if stage_exec_obj.state not in states.STAGE_FINAL_STATES:
+            stage_exec_obj.state = states.PAUSED
+            stage_exec_obj.pause_time = timezone.now()
+            step_exec_obj.pause_successors()  # PAUSE all successors so they can be executed after UNPAUSE
+            logger.logger.info("stageexecution paused", stage_execution_id=stage_exec_obj.model.id)
+
+        if not stage.StageExecutionModel.objects.filter(plan_execution_id=stage_exec_obj.model.plan_execution_id)\
+                .exclude(state__in=states.PLAN_STAGE_PAUSE_STATES).exists():
             msg = dict(event_t=constants.PAUSE,
                        event_v=dict(result=constants.RESULT_OK,
                                     plan_execution_id=step_exec_obj.model.stage_execution.plan_execution_id))
             util.rabbit_send_oneway_msg(queue_name=config.Q_EVENT_RESPONSE_NAME,
                                         msg=json.dumps(msg))
 
-        return None
-
-    def get_correlation_event(self, correlation_id: str) -> None or CorrelationEvent:
+    @staticmethod
+    def get_correlation_event(correlation_id: str) -> None or CorrelationEvent:
         """
         Get CorrelationEvent with timeout.
         :param correlation_id: Correlation ID
@@ -248,25 +245,23 @@ class Listener:
                            step_name=step_exec_obj.model.step_model.name, status=constants.STATUS_OK)
 
         # Postprocess all needed things, eg. sessions created, output storage etc
+        logger.logger.debug(step_execution_id=step_exec_obj.model.id, message_body=message_body)
         step_exec_obj.postprocess(message_body)
 
         # Set IGNORE to successors which should be ignored
         step_exec_obj.ignore_successors()
 
-        # Check if execution is being PAUSED
-        if plan.PlanExecution(plan_execution_id=step_exec_obj.model.stage_execution.plan_execution_id).state \
-                in [states.PAUSING, states.PAUSED]:
-            self.handle_paused(step_exec_obj)
-
-            # Delete the correlation object
-            correlation_event_obj.delete()
-            return None
-
-        # Execute successors
-        step_exec_obj.execute_successors()
-
         # Check if stage, plan or run should be set to FINISHED state
         self.handle_finished(step_exec_obj)
+
+        # Check if execution is being PAUSED
+        if plan.PlanExecution(plan_execution_id=step_exec_obj.model.stage_execution.plan_execution_id).state \
+                == states.PAUSING:
+            self.handle_paused(step_exec_obj)
+
+        else:
+            # Execute successors
+            step_exec_obj.execute_successors()
 
         # Delete the correlation object
         correlation_event_obj.delete()
@@ -305,7 +300,8 @@ class Listener:
 
         return None
 
-    def control_req_callback(self, message: amqpstorm.Message) -> None:
+    @staticmethod
+    def control_req_callback(message: amqpstorm.Message) -> None:
         """
         Process control request.
         :param message: RabbitMQ request
@@ -318,7 +314,8 @@ class Listener:
 
         return None
 
-    def event_callback(self, message: amqpstorm.Message) -> None:
+    @staticmethod
+    def event_callback(message: amqpstorm.Message) -> None:
         """
         Process event.
         :param message: RabbitMQ response
@@ -339,7 +336,8 @@ class Listener:
 
         return None
 
-    def handle_finished(self, step_exec_obj: step.StepExecution) -> None:
+    @staticmethod
+    def handle_finished(step_exec_obj: step.StepExecution) -> None:
         """
         Check for FINISHED states.
         :param step_exec_obj: StepExecution object to check
@@ -352,25 +350,17 @@ class Listener:
             stage_exec_obj.state = states.FINISHED
             stage_exec_obj.finish_time = timezone.now()
             stage_exec_obj.execute_subjects_to_dependency()
+            stage_exec_obj.trigger.stop()
 
             plan_exec_obj = plan.PlanExecution(plan_execution_id=stage_exec_obj.model.plan_execution_id)
             if plan_exec_obj.all_stages_finished:
-                logger.logger.info("planexecution finished",
-                                   plan_execution_id=plan_exec_obj.model.id)
+                logger.logger.info("planexecution finished", plan_execution_id=plan_exec_obj.model.id)
                 plan_exec_obj.state = states.FINISHED
                 plan_exec_obj.finish_time = timezone.now()
-
-                # Stop running HTTP triggers
-                for stage_execution_model in plan_exec_obj.model.stage_executions\
-                        .filter(stage_model__trigger_type=constants.HTTP_LISTENER):
-                    trigger_class = triggers.TriggerType[constants.HTTP_LISTENER].value
-                    trigger_class(stage_execution_id=stage_execution_model.id).stop()
-
                 plan_exec_obj.model.save()
+
                 run_obj = run.Run(run_model_id=plan_exec_obj.model.run_id)
                 if run_obj.all_plans_finished:
                     logger.logger.info("run finished", run_id=run_obj.model.id)
                     run_obj.state = states.FINISHED
                     run_obj.finish_time = timezone.now()
-
-        return None

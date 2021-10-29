@@ -29,6 +29,9 @@ REPORT_DIR = CRYTON_DIR + "reports/"
 EVIDENCE_DIR = CRYTON_DIR + "evidence/"
 FILE_UPLOAD_DIR = 'uploads'
 
+LOG_FILE_PATH = "/var/log/cryton.log"
+LOG_FILE_PATH_DEBUG = "/var/log/cryton-debug.log"
+
 USE_PROCESS_POOL = False
 MISFIRE_GRACE_TIME = 60
 

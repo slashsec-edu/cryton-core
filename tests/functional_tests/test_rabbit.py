@@ -24,21 +24,6 @@ class TestRabbit(TestCase):
     def test_connection(self):
         _ = util.rabbit_connection()
 
-    @patch('django.db.connections.close_all', MagicMock)
-    def test_send_msg(self):
-        conn = util.rabbit_connection()
-        channel = conn.channel()
-        self.stage_execution = baker.make(stage.StageExecutionModel)
-        self.step_model = baker.make(step.StepModel)
-        self.step_execution_obj = step.StepExecutionModel.objects.create(step_model=self.step_model,
-                                                                         stage_execution=self.stage_execution)
-        correlation_id = util.rabbit_send_msg(channel, self.worker.control_q_name, "msg", self.step_execution_obj.id,
-                                              config.Q_CONTROL_RESPONSE_NAME)
-        self.assertIsInstance(correlation_id, str)
-        correlation_id = util.rabbit_send_msg(channel, self.worker.attack_q_name, "msg", self.step_execution_obj.id,
-                                              config.Q_ATTACK_RESPONSE_NAME)
-        self.assertIsInstance(correlation_id, str)
-
     @patch("cryton.lib.triggers.trigger_delta.TriggerDelta.schedule")
     @patch('django.db.connections.close_all', MagicMock)
     def test_whole_plan_execution(self, mock_stage_schedule):

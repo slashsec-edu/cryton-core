@@ -6,7 +6,7 @@ from cryton.cryton_rest_api.models import (
     CorrelationEvent,
 )
 from cryton.lib.util import constants, logger, states
-from cryton.lib.models import plan, step, worker, run, stage
+from cryton.lib.models import plan, step, worker, run, stage, session
 from cryton.lib.services import scheduler
 
 import amqpstorm
@@ -100,11 +100,22 @@ def process_pause(event_obj: Event) -> int:
 
 
 def process_trigger(event_obj: Event) -> None:
-    stage_ex_id = event_obj.event_v.get("stage_execution_id")
+    """
+    Process callback and run desired StageExecution.
+    :param event_obj: Event object
+    :return: None
+    """
+    trigger_id = event_obj.event_v.get("trigger_id")
     logger.logger.debug("Processing trigger.", event_v=event_obj.event_v)
+    stage_ex_id = stage.StageExecutionModel.objects.get(trigger_id=trigger_id).id
     stage_ex = stage.StageExecution(stage_execution_id=stage_ex_id)
 
     if stage_ex.model.stage_model.trigger_type == constants.HTTP_LISTENER and stage_ex.state == states.AWAITING:
+        stage_ex.execute()
+
+    elif stage_ex.model.stage_model.trigger_type == constants.MSF_LISTENER and stage_ex.state == states.AWAITING:
+        session_name = f"{stage_ex.model.stage_model.name}_session"
+        session.create_session(stage_ex.model.plan_execution_id, event_obj.event_v.get("parameters"), session_name)
         stage_ex.execute()
 
     else:

@@ -42,6 +42,7 @@ EVIDENCE_FILE = 'evidence_file'
 # Stage trigger types
 DELTA = 'delta'
 HTTP_LISTENER = 'HTTPListener'
+MSF_LISTENER = 'MSFListener'
 
 # Step related
 RET_CODE_ENUM = {
@@ -59,10 +60,18 @@ VALID_SUCCESSOR_RESULTS = [RESULT_OK, RESULT_FAIL, RESULT_EXCEPTION, RESULT_TERM
 Q_ATTACK = 'attack'
 Q_CONTROL = 'control'
 
+# RabbitMQ message keywords
+EVENT_T = "event_t"
+EVENT_V = "event_v"
+ACK_QUEUE = "ack_queue"
+REPLY_TO = "reply_to"
+
 # Other contants
 PAUSE = 'PAUSE'
 STATUS_OK = 'success'
 EVENT_ACTION = 'action'
+TRIGGER_TYPE = "trigger_type"
+TRIGGER_ID = "trigger_id"
 
 # Worker event types
 EVENT_VALIDATE_MODULE = "VALIDATE_MODULE"
@@ -85,3 +94,7 @@ GET_JOBS = 'get_jobs'
 RESUME_JOB = 'resume_job'
 PAUSE_JOB = 'pause_job'
 RESCHEDULE_JOB = 'reschedule_job'
+
+# Datetime formats
+TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+TIME_FORMAT_DETAILED = "%Y-%m-%dT%H:%M:%S.%fZ"

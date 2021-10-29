@@ -168,7 +168,7 @@ class Run:
         return self.__workers
 
     @workers.setter
-    def workers(self, value=List[WorkerModel]):
+    def workers(self, value: List[WorkerModel]):
         self.__workers = value
 
     @property
@@ -247,7 +247,7 @@ class Run:
         return ret_dict
 
     def report(self) -> dict:
-        report_obj = RunReport(id=self.model.id, plan_id=self.model.plan_model_id,
+        report_obj = RunReport(id=self.model.id, plan_id=self.model.plan_model.id,
                                plan_name=self.model.plan_model.name, state=self.state,
                                schedule_time=self.schedule_time, start_time=self.start_time,
                                finish_time=self.finish_time, pause_time=self.pause_time, plan_executions=[])
@@ -258,13 +258,13 @@ class Run:
 
         return asdict(report_obj)
 
-    def schedule(self, schedule_time: datetime) -> str:
+    def schedule(self, schedule_time: datetime) -> None:
         """
         Schedules Run for specific time.
         :param schedule_time: Desired start time
-        :return: Job ID
+        :return: None
         :raises
-            :exception exceptions.WrongParameterError
+            :exception RuntimeError
         """
         logger.logger.debug("Scheduling Run", run_id=self.model.id)
         # Check state
@@ -276,11 +276,9 @@ class Run:
         if isinstance(self.aps_job_id, str):
             self.schedule_time = schedule_time.replace(tzinfo=timezone.utc)
             self.state = st.SCHEDULED
-
             logger.logger.info("run scheduled", run_id=self.model.id, status='success')
         else:
             raise RuntimeError("Could not schedule run")
-        return self.aps_job_id
 
     def unschedule(self) -> None:
         """
@@ -293,12 +291,8 @@ class Run:
 
         scheduler_client.remove_job(self.aps_job_id)
         self.aps_job_id, self.schedule_time = None, None
-
         self.state = st.PENDING
-
         logger.logger.info("run unscheduled", run_id=self.model.id, status='success')
-
-        return None
 
     def reschedule(self, schedule_time: datetime) -> None:
         """
@@ -315,8 +309,6 @@ class Run:
 
         logger.logger.info("run rescheduled", run_id=self.model.id, status='success')
 
-        return None
-
     def pause(self) -> None:
         """
         Pauses Run on specified WorkerModels
@@ -332,11 +324,10 @@ class Run:
         for plan_ex in self.model.plan_executions.all():
             plan.PlanExecution(plan_execution_id=plan_ex.id).pause()
 
-        if not self.model.plan_executions.exclude(state=st.PAUSED).exists():
+        if not self.model.plan_executions.exclude(state__in=st.RUN_PLAN_PAUSE_STATES).exists():
             self.state = st.PAUSED
             self.pause_time = timezone.now()
-
-        return None
+            logger.logger.info("run paused", run_id=self.model.id, status='success')
 
     def unpause(self) -> None:
         """
@@ -347,16 +338,13 @@ class Run:
         # Check state
         st.RunStateMachine(self.model.id).validate_state(self.state, st.RUN_UNPAUSE_STATES)
 
+        self.pause_time = None
+        self.state = st.RUNNING
+
         for plan_execution_model in self.model.plan_executions.all():
             plan.PlanExecution(plan_execution_id=plan_execution_model.id).unpause()
 
-        self.pause_time = None
-
-        if not self.model.plan_executions.filter(state__in=[st.PAUSED, st.PAUSING]).exists():
-            self.state = st.RUNNING
-            logger.logger.info("run unpaused", run_id=self.model.id, status='success')
-
-        return None
+        logger.logger.info("run unpaused", run_id=self.model.id, status='success')
 
     def postpone(self, delta: timedelta) -> None:
         """
@@ -375,8 +363,6 @@ class Run:
 
         logger.logger.info("run postponed", run_id=self.model.id, status='success')
 
-        return None
-
     def execute(self) -> None:
         """
         Executes Run
@@ -387,17 +373,14 @@ class Run:
         st.RunStateMachine(self.model.id).validate_state(self.state, st.RUN_EXECUTE_STATES)
 
         self.start_time = timezone.now()
+        self.state = st.RUNNING
 
         # Execute Plan on every Slave
         for worker_obj in self.workers:
             plan_execution_model = self.model.plan_executions.get(worker_id=worker_obj.id)
             plan.PlanExecution(plan_execution_id=plan_execution_model.id).execute()
 
-        self.state = st.RUNNING
-
         logger.logger.info("run executed", run_id=self.model.id, status='success')
-
-        return None
 
     def kill(self) -> None:
         """
@@ -413,12 +396,18 @@ class Run:
             thread = Thread(target=plan_ex.kill)
             threads.append(thread)
 
+        for plan_ex_obj in self.model.plan_executions.filter(state__in=st.PLAN_UNSCHEDULE_STATES):
+            plan_ex = plan.PlanExecution(plan_execution_id=plan_ex_obj.id)
+            thread = Thread(target=plan_ex.unschedule)
+            threads.append(thread)
+
         for thread in threads:
             thread.start()
 
         for thread in threads:
             thread.join()
 
+        self.finish_time = timezone.now()
         self.state = st.TERMINATED
         logger.logger.info("run killed", run_id=self.model.id, status='success')
 
