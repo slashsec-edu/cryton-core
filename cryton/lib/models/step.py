@@ -834,3 +834,37 @@ class StepExecution:
                                stage_name=self.model.step_model.name, status='failure', error=resp_dict.get('std_err'))
 
         return resp_dict
+
+    def re_execute(self) -> None:
+        """
+        Reset execution data and re-execute StepExecution.
+        :return: None
+        """
+        states.StepStateMachine(self.model.id).validate_state(self.state, states.STEP_FINAL_STATES)
+        self.reset_execution_data()
+        self.execute()
+
+    def reset_execution_data(self) -> None:
+        """
+        Reset changeable data to defaults.
+        :return: None
+        """
+        states.StepStateMachine(self.model.id).validate_state(self.state, states.STEP_FINAL_STATES)
+
+        with transaction.atomic():
+            model = self.model
+            StepExecutionModel.objects.select_for_update().get(id=model.id)
+
+            model.state = model._meta.get_field('state').get_default()
+            model.start_time = model._meta.get_field('start_time').get_default()
+            model.pause_time = model._meta.get_field('pause_time').get_default()
+            model.finish_time = model._meta.get_field('finish_time').get_default()
+            model.result = model._meta.get_field('result').get_default()
+            model.std_out = model._meta.get_field('std_out').get_default()
+            model.std_err = model._meta.get_field('std_err').get_default()
+            model.mod_out = model._meta.get_field('mod_out').get_default()
+            model.mod_err = model._meta.get_field('mod_err').get_default()
+            model.evidence_file = model._meta.get_field('evidence_file').get_default()
+            model.valid = model._meta.get_field('valid').get_default()
+            model.parent_id = model._meta.get_field('parent_id').get_default()
+            model.save()

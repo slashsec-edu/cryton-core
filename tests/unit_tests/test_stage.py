@@ -516,3 +516,23 @@ class TestStageExecute(TestCase):
         stage_execution_model = baker.make(StageExecutionModel, **{'state': 'RUNNING'})
         stage_execution = stage.StageExecution(stage_execution_id=stage_execution_model.id)
         stage_execution.validate_modules()
+
+    @patch("cryton.lib.models.stage.StageExecution.reset_execution_data", Mock())
+    @patch("cryton.lib.models.stage.StageExecution.execute")
+    def test_re_execute_immediately(self, mock_execute):
+        self.stage_ex_obj.re_execute(True)
+        mock_execute.assert_called()
+
+    @patch("cryton.lib.models.stage.StageExecution.reset_execution_data", Mock())
+    def test_re_execute(self):
+        with patch("cryton.lib.models.stage.StageExecution.trigger") as mock_trigger:
+            self.stage_ex_obj.re_execute()
+            mock_trigger.start.assert_called()
+
+    @patch("cryton.lib.models.stage.StepExecution.reset_execution_data", Mock())
+    def test_reset_execution_data(self):
+        stage_ex_model = baker.make(StageExecutionModel, **{'state': 'TERMINATED'})
+        stage_ex = stage.StageExecution(stage_execution_id=stage_ex_model.id)
+
+        stage_ex.reset_execution_data()
+        self.assertEqual(stage_ex.state, "PENDING")

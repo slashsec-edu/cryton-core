@@ -9,6 +9,7 @@ from cryton.cryton_rest_api.models import (
     RunModel,
     WorkerModel,
     StageExecutionModel,
+    StepExecutionModel,
     PlanTemplateFileModel,
     ExecutionVariableModel
 )
@@ -742,6 +743,38 @@ class RestRunTest(APITestCase):
                                     args,
                                     content_type="application/json"
                                     )
+        self.assertEqual(response.status_code, 200)
+
+
+@patch("sys.stdout", devnull)
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
+class StageExecutionTest(APITestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.stage_ex = baker.make(StageExecutionModel)
+
+    @patch("cryton.lib.models.stage.StageExecution.re_execute", Mock())
+    def test_re_execute(self):
+        response = self.client.post(reverse("stageexecutionmodel-re-execute", kwargs={"pk": self.stage_ex.id}),
+                                    {}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(reverse("stageexecutionmodel-re-execute", kwargs={"pk": self.stage_ex.id}),
+                                    {'immediately': "wrong"}, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+
+
+@patch("sys.stdout", devnull)
+@patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
+class StepExecutionTest(APITestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.step_ex = baker.make(StepExecutionModel)
+
+    @patch("cryton.lib.models.step.StepExecution.re_execute", Mock())
+    def test_re_execute(self):
+        response = self.client.post(reverse("stepexecutionmodel-re-execute", kwargs={"pk": self.step_ex.id}),
+                                    {}, content_type="application/json")
         self.assertEqual(response.status_code, 200)
 
 

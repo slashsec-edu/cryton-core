@@ -994,6 +994,21 @@ class StageExecutionViewSet(ExecutionViewSet):
 
         return queryset
 
+    response_detail = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_STRING)
+        }
+    )
+
+    request_detail = openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+        "immediately": openapi.Schema(
+            name='immediately',
+            type=openapi.TYPE_BOOLEAN
+        ),
+    })
+
     @action(methods=["get"], detail=True)
     def report(self, _, **kwargs):
         stage_execution_id = kwargs.get('pk')
@@ -1017,6 +1032,27 @@ class StageExecutionViewSet(ExecutionViewSet):
         msg = {'detail': '{}'.format("Stage execution {} is terminated.".format(stage_execution_id))}
         return Response(msg, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(operation_description="Re-execute StageExecution.", request_body=request_detail,
+                         responses={200: response_detail, 400: response_detail, 500: response_detail})
+    @action(methods=["post"], detail=True)
+    def re_execute(self, request, **kwargs):
+        stage_execution_id = kwargs.get('pk')
+        stage_ex_obj = stage.StageExecution(stage_execution_id=stage_execution_id)
+
+        immediately = request.data.get('immediately', True)
+        if not isinstance(immediately, bool):
+            raise exceptions.ApiWrongOrMissingArgument(param_name='immediately', param_type=bool)
+
+        try:
+            stage_ex_obj.re_execute(immediately)
+        except (core_exceptions.StateTransitionError, core_exceptions.InvalidStateError) as ex:
+            raise exceptions.ApiWrongObjectState(str(ex))
+        except Exception as ex:
+            raise exceptions.ApiInternalError(str(ex))
+
+        msg = {'detail': '{}'.format("Stage execution {} re-executed.".format(stage_execution_id))}
+        return Response(msg, status=status.HTTP_200_OK)
+
 
 class StepExecutionViewset(ExecutionViewSet):
     """
@@ -1032,6 +1068,16 @@ class StepExecutionViewset(ExecutionViewSet):
     }
     queryset = StepExecutionModel.objects.all()
     http_method_names = ["get", "post"]
+
+    response_detail = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_STRING)
+        }
+    )
+
+    request_detail = openapi.Schema(type=openapi.TYPE_OBJECT)
 
     @filter_decorator
     def get_queryset(self):
@@ -1071,6 +1117,23 @@ class StepExecutionViewset(ExecutionViewSet):
             raise exceptions.ApiInternalError(str(ex))
 
         msg = {'detail': '{}'.format("Step execution {} is terminated.".format(step_execution_id))}
+        return Response(msg, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(operation_description="Re-execute StepExecution.", request_body=request_detail,
+                         responses={200: response_detail, 400: response_detail, 500: response_detail})
+    @action(methods=["post"], detail=True)
+    def re_execute(self, _, **kwargs):
+        step_execution_id = kwargs.get('pk')
+        step_ex_obj = stage.StepExecution(step_execution_id=step_execution_id)
+
+        try:
+            step_ex_obj.re_execute()
+        except (core_exceptions.StateTransitionError, core_exceptions.InvalidStateError) as ex:
+            raise exceptions.ApiWrongObjectState(str(ex))
+        except Exception as ex:
+            raise exceptions.ApiInternalError(str(ex))
+
+        msg = {'detail': '{}'.format("Step execution {} re-executed.".format(step_execution_id))}
         return Response(msg, status=status.HTTP_200_OK)
 
 
