@@ -506,6 +506,41 @@ class StageExecution:
             subject_to_ex_obj = StageExecution(stage_execution_id=subject_to_ex.id)
             Thread(target=subject_to_ex_obj.execute).run()
 
+    def re_execute(self, immediately: bool = False) -> None:
+        """
+        Reset execution data and re-execute StageExecution.
+        :return: None
+        """
+        st.StageStateMachine(self.model.id).validate_state(self.state, st.STAGE_FINAL_STATES)
+        self.reset_execution_data()
+        if immediately:
+            self.execute()
+        else:
+            self.trigger.start()
+
+    def reset_execution_data(self) -> None:
+        """
+        Reset changeable data to defaults and reset StepExecutions.
+        :return: None
+        """
+        st.StageStateMachine(self.model.id).validate_state(self.state, st.STAGE_FINAL_STATES)
+
+        with transaction.atomic():
+            model = self.model
+            StageExecutionModel.objects.select_for_update().get(id=model.id)
+
+            model.state = model._meta.get_field('state').get_default()
+            model.aps_job_id = model._meta.get_field('aps_job_id').get_default()
+            model.trigger_id = model._meta.get_field('trigger_id').get_default()
+            model.start_time = model._meta.get_field('start_time').get_default()
+            model.schedule_time = model._meta.get_field('schedule_time').get_default()
+            model.pause_time = model._meta.get_field('pause_time').get_default()
+            model.finish_time = model._meta.get_field('finish_time').get_default()
+            model.save()
+
+        for step_ex_model in self.model.step_executions.all():
+            StepExecution(step_execution_id=step_ex_model.id).reset_execution_data()
+
 
 def execution(execution_id: int) -> None:
     """

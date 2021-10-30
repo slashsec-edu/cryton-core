@@ -829,3 +829,20 @@ class TestStepExecute(TestCase):
         with self.assertLogs('cryton-debug', level='INFO'):
             ret = step_ex.kill()
         self.assertEqual(ret, {'return_code': 0})
+
+    @patch("cryton.lib.models.stage.StepExecution.reset_execution_data", Mock())
+    @patch("cryton.lib.models.stage.StepExecution.execute")
+    def test_re_execute(self, mock_execute):
+        step_ex_model = baker.make(StepExecutionModel, **{'state': 'TERMINATED'})
+        step_ex = step.StepExecution(step_execution_id=step_ex_model.id)
+
+        step_ex.re_execute()
+        mock_execute.assert_called()
+
+    def test_reset_execution_data(self):
+        step_ex_model = baker.make(StepExecutionModel, **{'state': 'TERMINATED'})
+        step_ex = step.StepExecution(step_execution_id=step_ex_model.id)
+
+        step_ex.reset_execution_data()
+        self.assertEqual(step_ex.state, "PENDING")
+
