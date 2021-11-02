@@ -11,8 +11,5 @@ COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 
 RUN apk update && apk add postgresql-dev gcc python3-dev musl-dev linux-headers
 RUN python setup.py install
-RUN python setup.py develop
 
-COPY ./docker_files/startup.sh /
-RUN chmod +x /startup.sh
-ENTRYPOINT /startup.sh
+CMD ["cryton-manage", "runserver", "0.0.0.0:8000"]

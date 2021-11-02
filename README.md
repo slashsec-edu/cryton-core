@@ -15,7 +15,8 @@
 **Cryton** - Breach Emulation & Attack Simulation Toolset
 
 # Description
-Cryton is a set of tools for complex attack scenarios automation. Through usage of core and attack modules it provides ways to plan, execute and evaluate multi step attacks.
+Cryton is a set of tools for complex attack scenarios automation. Through usage of core and attack modules it provides ways 
+to plan, execute and evaluate multi step attacks.
 
 There are 4 separate projects of Cryton toolset:
 * **Cryton Core**: Contains Cryton Core functions for working with database, task scheduler and execution mechanism.
@@ -32,7 +33,9 @@ Cryton is tested and runs best under Kali Linux OS 2019.1 using *root* user.
 * docker-compose
 
 ## For manual installation
-Cryton uses **PostgreSQL** as it's internal database, so this must be installed and started on your system. So far the only supported OS is **Kali Linux**, preferably 2019.1 stable release. Additionally there are some other dependencies. Please check you have following tools/packages installed:
+Cryton uses **PostgreSQL** as it's internal database, so this must be installed and started on your system. So far the only 
+supported OS is **Kali Linux**, preferably 2019.1 stable release. Additionally there are some other dependencies. Please 
+check you have following tools/packages installed:
 * python3.7
 * (optional) pipenv
 * postgresql
@@ -41,7 +44,9 @@ Cryton uses **PostgreSQL** as it's internal database, so this must be installed 
 
 # Installation
 
-Important note: this guide only explains how to install **Cryton Core** package. For being able to execute the attack scenarios, you also need to install the **Cryton Worker** package. If you want to use attack modules provided by Cryton, you have to also install **Cryton Modules**.
+Important note: this guide only explains how to install **Cryton Core** package. For being able to execute the attack 
+scenarios, you also need to install the **Cryton Worker** package. If you want to use attack modules provided by Cryton, 
+you have to also install **Cryton Modules**.
 
 ## Docker (recommended)
 
@@ -86,18 +91,43 @@ Everything should be set. Check if the installation was successful by either ins
 
 ~~~~
 user@localhost:~ /cryton-core $ curl localhost:8000
-{"runs":"http://localhost:8000/cryton/api/v1/runs/","plans":"http://localhost:8000/cryton/api/v1/plans/","plan_executions":"http://localhost:8000/cryton/api/v1/plan_executions/","stages":"http://localhost:8000/cryton/api/v1/stages/","stage_executions":"http://localhost:8000/cryton/api/v1/stage_executions/","steps":"http://localhost:8000/cryton/api/v1/steps/","step_executions":"http://localhost:8000/cryton/api/v1/step_executions/","workers":"http://localhost:8000/cryton/api/v1/workers/"}
+{"runs":"http://localhost:8000/cryton/api/v1/runs/","plans":"http://localhost:8000/cryton/api/v1/plans/",
+"plan_executions":"http://localhost:8000/cryton/api/v1/plan_executions/","stages":"http://localhost:8000/cryton/api/v1/stages/",
+"stage_executions":"http://localhost:8000/cryton/api/v1/stage_executions/","steps":"http://localhost:8000/cryton/api/v1/steps/",
+"step_executions":"http://localhost:8000/cryton/api/v1/step_executions/","workers":"http://localhost:8000/cryton/api/v1/workers/"}
 ~~~~
 
 
 ### Production
-For production environment, there are some other options needed (such as publishing ports to public IP addressuse, persistent database data volume etc. For production deployment, use:
+For production environment, there are some other options needed (such as publishing ports to public IP addressuse, 
+persistent database data volume etc. For production deployment, use:
 ~~~~
-user@localhost:~ /cryton-core $ docker-compose -f docker-compose.prod.yml up -d
+docker-compose -f docker-compose.prod.yml up -d
 ~~~~ 
 The rest of the steps is the same as above.
 
-## From source (manual)
+### Development
+For development environment, there is a light version of the production Docker which can be used with a debugger. 
+For development deployment, use:
+~~~~
+docker-compose -f docker-compose.dev.yml up -d
+~~~~ 
+
+After that, you should run database migrations:
+
+~~~~
+docker-compose exec cryton_app cryton-manage migrate
+~~~~
+
+
+django run configuration:
+- host: 0.0.0.0  
+- port: 8000  
+- env vars: PYTHONUNBUFFERED=1;DJANGO_SETTINGS_MODULE=cryton.settings  
+- interpreter: docker compose python cryton_app
+
+
+## From source (manual; not recommended)
 
 First you need to create database and database tables Cryton internal storage. This database is also used for scheduler and tasks persistence:
 ~~~~
