@@ -13,31 +13,13 @@ services:
     ports:
       - "15432:5432"
     env_file:
-      - .env
-  cryton_pgbouncer:
-    image: edoburu/pgbouncer:1.15.0
-    restart: always
-    container_name: "cryton_pgbouncer"
-    depends_on:
-      - cryton_db
-    environment:
-      DB_HOST: cryton_db
-      DB_USER: $CRYTON_DB_USERNAME
-      DB_NAME: $CRYTON_DB_NAME
-      DB_PASSWORD: $CRYTON_DB_PASSWORD
-      MAX_CLIENT_CONN: 5000
-      DEFAULT_POOL_SIZE: 8
-      MIN_POOL_SIZE: 8
-      POOL_MODE: transaction
-    expose:
-      - "5432"
-    env_file:
-      - .env
+      - .env-dev
+
   cryton_app:
     restart: always
     build:
       context: .
-      dockerfile: docker_files/Dockerfile-cryton
+      dockerfile: docker_files/Dockerfile-cryton-dev
     image: cryton
     expose:
       - "8000"
@@ -47,14 +29,15 @@ services:
     volumes:
       - ./:/app
     env_file:
-      - .env
+      - .env-dev
+
   cryton_rabbit:
     hostname: cryton_rabbit
     image: rabbitmq:3.9-management
     restart: always
     container_name: "cryton_rabbit"
     env_file:
-      - .env
+      - .env-dev
     environment:
       RABBITMQ_DEFAULT_USER: ${CRYTON_RABBIT_USERNAME}
       RABBITMQ_DEFAULT_PASS: ${CRYTON_RABBIT_PASSWORD}
@@ -83,7 +66,7 @@ services:
       - ./:/app
     entrypoint: [ "cryton-manage", "startlistener" ]
     env_file:
-      - .env
+      - .env-dev
 
   apache:
     restart: always
@@ -96,4 +79,4 @@ services:
     ports:
       - "$CRYTON_PUBLIC_PORT:80"
     env_file:
-      - .env
+      - .env-dev

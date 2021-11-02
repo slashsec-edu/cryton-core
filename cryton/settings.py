@@ -49,7 +49,7 @@ TEMPLATES = [
 
 CORS_ORIGIN_ALLOW_ALL = True
 
-DEBUG = True if 'True' == os.getenv('CRYTON_DEBUG', 'False') else False
+DEBUG = True if 'debug' == os.getenv('CRYTON_LOGGER', 'debug') else False
 
 ALLOWED_HOSTS = "*"
 
