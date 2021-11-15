@@ -609,14 +609,15 @@ class StepExecution:
         target_queue = worker.Worker(worker_model_id=worker_model.id).attack_q_name
 
         with util.Rpc(rabbit_channel) as rpc:
-            response = rpc.call(target_queue, message_body, 10, config.Q_ATTACK_RESPONSE_NAME)
+            correlation_id = rpc.prepare_message(message_body, config.Q_ATTACK_RESPONSE_NAME)
+            CorrelationEvent.objects.create(correlation_id=correlation_id, step_execution_id=self.model.id,
+                                            worker_q_name=target_queue)
+
+            response = rpc.call(target_queue, time_limit=10)
             if response is None:
                 raise exceptions.RabbitConnectionError("No response from Worker.")
             correlation_id = rpc.correlation_id
 
-        CorrelationEvent.objects.create(correlation_id=correlation_id,
-                                        step_execution_id=self.model.id,
-                                        worker_q_name=target_queue)
         return correlation_id
 
     def get_regex_sucessors(self) -> QuerySet:
