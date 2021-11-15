@@ -4,7 +4,7 @@ import json
 import base64
 import time
 from threading import Thread
-from functools import reduce, partial
+from functools import reduce
 import copy
 from typing import List, Union, Dict, Optional
 from datetime import datetime, timedelta
@@ -645,6 +645,7 @@ class Rpc:
         self.response = None
         self.connection = None
         self.queue_name = str(uuid.uuid1())
+        self.message = None
         self.correlation_id = None
 
         self.open()
@@ -679,16 +680,11 @@ class Rpc:
             self.channel.close()
             self.connection.close()
 
-    def call(self, queue_name: str, msg_body: dict, time_limit: float = config.CRYTON_RPC_TIMEOUT,
-             reply_queue: str = None) -> dict:
+    def prepare_message(self, msg_body: dict, reply_queue: str = None) -> str:
         """
-        Create RPC call and wait for response.
-        :param queue_name: Target RabbitMQ queue
+        Create message.
         :param msg_body: Message contents
-        :param time_limit: Time limit for response
-        :param reply_queue: Custom queue to send the reply to (moves self.queue to msg_body["ack_queue"]
-        and is used for message acknowledgment)
-        :return: Call's response
+        :param reply_queue: Custom queue to send the reply to (moves self.queue to msg_body["ack_queue"])
         """
         if reply_queue is not None:  # Update message content and reply_queue.
             msg_body.update({constants.ACK_QUEUE: self.queue_name})
@@ -696,13 +692,29 @@ class Rpc:
             reply_queue = self.queue_name
 
         msg_body = json.dumps(msg_body)  # Create send and process message.
-        message = Message.create(self.channel, msg_body)
-        message.reply_to = reply_queue
+        self.message = Message.create(self.channel, msg_body)
+        self.message.reply_to = reply_queue
 
-        self.correlation_id = message.correlation_id
-        message.publish(queue_name)
+        self.correlation_id = self.message.correlation_id
+        return self.correlation_id
 
+    def call(self, queue_name: str, msg_body: dict = None, time_limit: float = config.CRYTON_RPC_TIMEOUT) -> dict:
+        """
+        Create RPC call and wait for response.
+        :param queue_name: Target RabbitMQ queue
+        :param msg_body: Message contents
+        :param time_limit: Time limit for response
+        and is used for message acknowledgment)
+        :return: Call's response
+        """
+        if self.message is None:
+            self.prepare_message(msg_body)
+
+        self.message.publish(queue_name)
         self.wait_for_response(time_limit)
+        
+        self.message = None
+        self.correlation_id = None
         return self.response
 
     def wait_for_response(self, time_limit: float, sleep_time: float = 0.2) -> None:
