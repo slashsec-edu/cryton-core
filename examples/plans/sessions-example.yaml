@@ -10,20 +10,24 @@ plan:
     steps:
     - name: ssh-session
       is_init: true
-      attack_module: mod_msf
-      attack_module_args:
-        create_named_session: session_to_target_1
-        exploit: auxiliary/scanner/ssh/ssh_login
-        exploit_arguments:
-          RHOSTS: 127.0.0.1
-          USERNAME: vagrant
-          PASSWORD: vagrant
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_msf
+        attack_module_args:
+          create_named_session: session_to_target_1
+          exploit: auxiliary/scanner/ssh/ssh_login
+          exploit_arguments:
+            RHOSTS: 127.0.0.1
+            USERNAME: vagrant
+            PASSWORD: vagrant
       next:
         - type: result
           value: OK
           step: session-cmd
     - name: session-cmd
-      attack_module: mod_cmd
-      attack_module_args:
-        use_named_session: session_to_target_1
-        cmd: cat /etc/passwd
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_cmd
+        attack_module_args:
+          use_named_session: session_to_target_1
+          cmd: cat /etc/passwd

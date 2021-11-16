@@ -86,6 +86,11 @@ class Worker:
         return worker_q_name
 
     @property
+    def agent_q_name(self):
+        worker_q_name = "cryton_worker.{}.agent.request".format(self.q_prefix)
+        return worker_q_name
+
+    @property
     def control_q_name(self):
         worker_q_name = "cryton_worker.{}.control.request".format(self.q_prefix)
         return worker_q_name

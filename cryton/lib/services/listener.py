@@ -130,6 +130,7 @@ class Listener:
 
         # Pair up queues and callbacks
         queues = {config.Q_ATTACK_RESPONSE_NAME: self.step_resp_callback,
+                  config.Q_AGENT_RESPONSE_NAME: self.step_resp_callback,
                   config.Q_CONTROL_RESPONSE_NAME: self.control_resp_callback,
                   config.Q_EVENT_RESPONSE_NAME: self.event_callback,
                   config.Q_CONTROL_REQUEST_NAME: self.control_req_callback}

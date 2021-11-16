@@ -9,18 +9,22 @@ plan:
       seconds: 1
     steps:
     - name: scan-localhost
+      step_type: cryton/execute-on-worker
       is_init: true
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          target: 127.0.0.1
-          ports:
-            - 22
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            target: 127.0.0.1
+            ports:
+              - 22
       next:
       - type: result
         value: OK
         step: ssh-bruteforce
     - name: ssh-bruteforce
-      attack_module: infrastructure/exploits/mod_msf
-      attack_module_args:
-          exploit: auxiliary/scanner/ssh/ssh_login
-          USERPASS_FILE: /usr/share/metasploit-framework/data/wordlists/root_userpass.txt
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/exploits/mod_msf
+        attack_module_args:
+            exploit: auxiliary/scanner/ssh/ssh_login
+            USERPASS_FILE: /usr/share/metasploit-framework/data/wordlists/root_userpass.txt

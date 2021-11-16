@@ -10,19 +10,23 @@ plan:
     steps:
     - name: scan-localhost
       is_init: true
-      attack_module: mod_nmap
-      attack_module_args:
-        target: 127.0.0.1
-        ports:
-          - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_nmap
+        attack_module_args:
+          target: 127.0.0.1
+          ports:
+            - 22
       next:
         - type: result
           value: OK
           step: bruteforce
     - name: bruteforce
-      attack_module: mod_medusa
-      attack_module_args:
-        target: 127.0.0.1
-        credentials:
-          username: vagrant
-          # default password_list will be used for bruteforce
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_medusa
+        attack_module_args:
+          target: 127.0.0.1
+          credentials:
+            username: vagrant
+            # default password_list will be used for bruteforce

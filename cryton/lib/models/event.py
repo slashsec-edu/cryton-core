@@ -62,7 +62,7 @@ def process_control_event(control_event_t: str,
 
 def process_validate_module(event_obj: Event, step_execution_id: Union[int, Type[int]]) -> bool:
     """
-    Process validate_module
+    Process validate_cryton_module
     :param event_obj: Event object
     :param step_execution_id: Step execution ID
     :return: True or False, depending on validity of module

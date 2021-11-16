@@ -10,11 +10,13 @@ plan:
     steps:
     - name: step1
       is_init: true
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          target: 127.0.0.1
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            target: 127.0.0.1
+            ports:
+              - 22
       next:
       - type: std_out
         value: r"test"
@@ -24,10 +26,12 @@ plan:
         step: step3
     
     - name: step2
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            ports:
+              - 22
       next:
       - type: result
         value: OK
@@ -37,10 +41,12 @@ plan:
         step: step5
     
     - name: step3
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            ports:
+              - 22
       next:
       - type: result
         value: OK
@@ -50,10 +56,12 @@ plan:
         step: step6
     
     - name: step4
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            ports:
+              - 22
       next:
       - type: result
         value: OK
@@ -63,22 +71,24 @@ plan:
         step: step8
 
     - name: step5
-
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            ports:
+              - 22
       next:
       - type: result
         value: OK
         step: step7
 
     - name: step6
-
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            ports:
+              - 22
       next:
       - type: result
         value: OK
@@ -86,41 +96,45 @@ plan:
 
 
     - name: step7
-
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            ports:
+              - 22
       next:
       - type: result
         value: OK
         step: step9
 
     - name: step8
-
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            ports:
+              - 22
       next:
       - type: result
         value: FAIL
         step: step9
 
     - name: step9
-
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            ports:
+              - 22
       next:
       - type: any
         value: OK
         step: step10
 
     - name: step10
-
-      attack_module: infrastructure/scan/mod_nmap
-      attack_module_args:
-          ports:
-            - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: infrastructure/scan/mod_nmap
+        attack_module_args:
+            ports:
+              - 22

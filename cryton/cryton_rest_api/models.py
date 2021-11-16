@@ -51,8 +51,8 @@ class StageModel(InstanceModel):
 
 class StepModel(InstanceModel):
     stage_model = models.ForeignKey(StageModel, on_delete=models.CASCADE, related_name='steps')
-    attack_module = models.TextField()
-    attack_module_args = models.JSONField()
+    step_type = models.TextField(null=False, blank=False)
+    arguments = models.JSONField(null=False, blank=False)
     is_init = models.BooleanField(default=False)
     is_final = models.BooleanField(default=False)
     executor = models.TextField(null=True, blank=True)

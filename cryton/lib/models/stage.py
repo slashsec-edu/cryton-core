@@ -232,9 +232,12 @@ class Stage:
             except exceptions.StageCycleDetected:
                 raise exceptions.StageValidationError("Cycle detected in Stage", stage_name=stage_dict.get('name'))
         if all_steps_set != reachable_steps_set:
+            if len(reachable_steps_set) == 0:
+                reachable_steps_set = None
             raise exceptions.StageValidationError(
-                f'There is a problem with steps. Check that all steps are reachable, and that only existing steps are '
-                f'set as successors. All steps: {all_steps_set}, reachable steps:{reachable_steps_set}', )
+                f'There is a problem with steps. Check that all steps are reachable, only existing steps are set as '
+                f'successors, and at least one initial step exists. '
+                f'All steps: {all_steps_set}, reachable steps: {reachable_steps_set}', )
 
         # Check that init steps are not set as successors
         if not init_steps.isdisjoint(all_successors_set):
@@ -446,7 +449,7 @@ class StageExecution:
         """
         logger.logger.debug("Validationg modules", stage_id=self.model.stage_model_id)
         for step_ex_id in self.model.step_executions.values_list('id', flat=True):
-            StepExecution(step_execution_id=step_ex_id).validate_module()
+            StepExecution(step_execution_id=step_ex_id).validate_cryton_module()
 
         return None
 
