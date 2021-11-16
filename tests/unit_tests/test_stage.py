@@ -88,11 +88,10 @@ class TestStage(TestCase):
 
     def test_property_final_steps(self):
         step_args = {'stage_model_id': self.stage_obj.model.id,
-                     'attack_module': 'attack_module',
                      'is_init': False,
                      'is_final': True,
                      'executor': 'executor',
-                     'attack_module_args': {},
+                     'arguments': {},
                      'name': 'final_step'}
         StepModel.objects.create(**step_args)
         step_args.update({'is_final': False, 'name': 'not_final_step'})
@@ -511,7 +510,7 @@ class TestStageExecute(TestCase):
     def test_execution(self):
         self.assertIsNone(stage.execution(1))
 
-    @patch("cryton.lib.models.stage.StepExecution.validate_module", MagicMock())
+    @patch("cryton.lib.models.stage.StepExecution.validate_cryton_module", MagicMock())
     def test_validate_modules(self):
         stage_execution_model = baker.make(StageExecutionModel, **{'state': 'RUNNING'})
         stage_execution = stage.StageExecution(stage_execution_id=stage_execution_model.id)

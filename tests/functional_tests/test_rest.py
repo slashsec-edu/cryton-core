@@ -335,7 +335,7 @@ class RestStepTest(APITestCase):
         response = self.client.post(reverse('stepmodel-validate'), plan_dict, content_type="application/json")
         self.assertEqual(response.status_code, 200)
 
-        plan_dict.pop('attack_module')
+        plan_dict.pop('step_type')
         response = self.client.post(reverse('stepmodel-validate'), plan_dict, content_type="application/json")
         self.assertEqual(response.status_code, 400)
 

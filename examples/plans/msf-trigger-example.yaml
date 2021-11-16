@@ -16,8 +16,10 @@ plan:
     steps:
     - name: execute-in-session
       is_init: true
-      attack_module: mod_cmd
-      attack_module_args:
-        use_named_session: stage-one_session
-        cmd: whoami
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_cmd
+        attack_module_args:
+          use_named_session: stage-one_session
+          cmd: whoami
 

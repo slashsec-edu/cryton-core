@@ -501,10 +501,10 @@ class PlanExecutionTest(TestCase):
     def test_report_custom_path(self):
         expected_dict = {"plan_name": "test-plan",
                          "stages": {"test-stage": {
-                             "test-step": {"executor": "test-executor", "module": "test-module", "state": "test-state",
-                                           "result": "test-result", "std_out": "test-out", "std_err": "test-err",
+                             "test-step": {"executor": "test-executor", "state": "test-state", "result": "test-result",
+                                           "std_out": "test-out", "std_err": "test-err", "step_type": "test_type",
                                            "mod_out": "test-mod", "mod_err": "test-mod_err"}}}}
-        step_model = baker.make(StepModel, executor="test-executor", attack_module="test-module", name="test-step")
+        step_model = baker.make(StepModel, executor="test-executor", name="test-step", step_type="test_type")
         step_execution_model = baker.make(StepExecutionModel, step_model=step_model, state="test-state",
                                           result="test-result",
                                           std_out="test-out", std_err="test-err", mod_out="test-mod",
@@ -528,10 +528,10 @@ class PlanExecutionTest(TestCase):
     def test_report_default_path(self):
         expected_dict = {"plan_name": "test-plan",
                          "stages": {"test-stage": {
-                             "test-step": {"executor": "test-executor", "module": "test-module", "state": "test-state",
+                             "test-step": {"executor": "test-executor", "state": "test-state", "step_type": "test_type",
                                            "result": "test-result", "std_out": "test-out", "std_err": "test-err",
                                            "mod_out": "test-mod", "mod_err": "test-mod_err"}}}}
-        step_model = baker.make(StepModel, executor="test-executor", attack_module="test-module", name="test-step")
+        step_model = baker.make(StepModel, executor="test-executor", name="test-step", step_type="test_type")
         step_execution_model = baker.make(StepExecutionModel, step_model=step_model, state="test-state",
                                           result="test-result",
                                           std_out="test-out", std_err="test-err", mod_out="test-mod",

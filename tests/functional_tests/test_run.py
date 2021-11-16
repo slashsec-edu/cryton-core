@@ -6,7 +6,7 @@ import yaml
 from unittest.mock import patch, Mock, MagicMock
 
 from cryton.lib.util import creator, exceptions, logger, states
-from cryton.lib.models import step, run, plan
+from cryton.lib.models import step, run, plan, worker
 
 from cryton.cryton_rest_api.models import (
     PlanModel,
@@ -132,7 +132,7 @@ class TestVariables(TestCase):
 
     @patch('cryton.lib.util.scheduler_client.schedule_function')
     @patch('cryton.lib.util.scheduler_client.remove_job')
-    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_step')
     def test_use_var(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -154,17 +154,19 @@ class TestVariables(TestCase):
                                                        step_model__name='step2')
 
         rabbit_channel = MagicMock()
-        step.StepExecution(step_execution_id=step_ex_obj_2.id).execute(rabbit_channel=rabbit_channel)
+        step_ex = step.StepExecution(step_execution_id=step_ex_obj_2.id)
+        step_ex.execute(rabbit_channel=rabbit_channel)
 
-        step_arguments = {'cmd': 'testing'}
+        step_arguments = {'attack_module': 'mod_cmd', 'attack_module_args': {'cmd': 'testing'}}
 
-        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.attack_module, step_arguments,
-                                    step_ex_obj_2.stage_execution.plan_execution.worker,
+        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.step_type, step_arguments,
+                                    step_ex.model.stage_execution.plan_execution.worker,
                                     step_ex_obj_2.step_model.executor)
+
 
     @patch('cryton.lib.util.scheduler_client.schedule_function')
     @patch('cryton.lib.util.scheduler_client.remove_job')
-    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_step')
     def test_use_var_prefix(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -186,17 +188,19 @@ class TestVariables(TestCase):
                                                        step_model__name='step2')
 
         rabbit_channel = MagicMock()
-        step.StepExecution(step_execution_id=step_ex_obj_2.id).execute(rabbit_channel=rabbit_channel)
+        step_ex = step.StepExecution(step_execution_id=step_ex_obj_2.id)
+        step_ex.execute(rabbit_channel=rabbit_channel)
 
-        step_arguments = {'cmd': 'testing'}
+        step_arguments = {'attack_module': 'mod_cmd', 'attack_module_args': {'cmd': 'testing'}}
 
-        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.attack_module, step_arguments,
-                                    step_ex_obj_2.stage_execution.plan_execution.worker,
+        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.step_type, step_arguments,
+                                    step_ex.model.stage_execution.plan_execution.worker,
                                     step_ex_obj_2.step_model.executor)
+
 
     @patch('cryton.lib.util.scheduler_client.schedule_function')
     @patch('cryton.lib.util.scheduler_client.remove_job')
-    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_step')
     def test_use_var_mapping(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -218,17 +222,18 @@ class TestVariables(TestCase):
                                                        step_model__name='step2')
 
         rabbit_channel = MagicMock()
-        step.StepExecution(step_execution_id=step_ex_obj_2.id).execute(rabbit_channel=rabbit_channel)
+        step_ex = step.StepExecution(step_execution_id=step_ex_obj_2.id)
+        step_ex.execute(rabbit_channel=rabbit_channel)
 
-        step_arguments = {'cmd': 'testing'}
+        step_arguments = {'attack_module': 'mod_cmd', 'attack_module_args': {'cmd': 'testing'}}
 
-        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.attack_module, step_arguments,
-                                    step_ex_obj_2.stage_execution.plan_execution.worker,
+        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.step_type, step_arguments,
+                                    step_ex.model.stage_execution.plan_execution.worker,
                                     step_ex_obj_2.step_model.executor)
 
     @patch('cryton.lib.util.scheduler_client.schedule_function')
     @patch('cryton.lib.util.scheduler_client.remove_job')
-    @patch('cryton.lib.models.step.StepExecution._execute_attack_module')
+    @patch('cryton.lib.models.step.StepExecution._execute_step')
     def test_use_var_parent(self, moc_exec, moc_remove, mock_sched):
         mock_sched.return_value = 0
         moc_remove.return_value = 0
@@ -254,8 +259,7 @@ class TestVariables(TestCase):
         succ_step_ex_obj.parent_id = step_ex_obj.model.id
         succ_step_ex_obj.execute(rabbit_channel=rabbit_channel)
 
-        step_arguments = {'cmd': 'testing'}
-
-        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.attack_module, step_arguments,
+        step_arguments = {'attack_module': 'mod_cmd', 'attack_module_args': {'cmd': 'testing'}}
+        moc_exec.assert_called_with(rabbit_channel, step_ex_obj_2.step_model.step_type, step_arguments,
                                     step_ex_obj_2.stage_execution.plan_execution.worker,
                                     step_ex_obj_2.step_model.executor)

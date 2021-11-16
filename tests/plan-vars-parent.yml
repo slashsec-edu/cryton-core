@@ -9,14 +9,18 @@ plan:
     steps:
     - name: step1
       is_init: true
-      attack_module: mod_cmd
-      attack_module_args:
-          cmd: echo ls
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_cmd
+        attack_module_args:
+            cmd: echo ls
       next:
       - type: result
         value: OK
         step: step2
     - name: step2
-      attack_module: mod_cmd
-      attack_module_args:
-          cmd: $parent.cmd_output
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_cmd
+        attack_module_args:
+            cmd: $parent.cmd_output

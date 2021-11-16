@@ -285,9 +285,12 @@ class PlanExecution:
         self.state = st.RUNNING
 
         self.__generate_evidence_dir()
+
+        # TODO: move queue preparation to worker creation?
         # Prepare rabbit queue
-        queue_name = worker.Worker(worker_model_id=self.model.worker_id).attack_q_name
-        util.rabbit_prepare_queue(queue_name)
+        worker_obj = worker.Worker(worker_model_id=self.model.worker_id)
+        util.rabbit_prepare_queue(worker_obj.attack_q_name)
+        util.rabbit_prepare_queue(worker_obj.agent_q_name)
 
         # Start triggers
         self.start_triggers()
@@ -418,7 +421,7 @@ class PlanExecution:
                 for step_execution_model in stage_execution_model.step_executions.all():
                     step = step_execution_model.step_model
                     step_info = {"executor": step.executor,
-                                 "module": step.attack_module,
+                                 "step_type": step.step_type,
                                  co.STATE: step_execution_model.state, co.RESULT: step_execution_model.result,
                                  co.STD_OUT: step_execution_model.std_out, co.STD_ERR: step_execution_model.std_err,
                                  co.MOD_OUT: step_execution_model.mod_out, co.MOD_ERR: step_execution_model.mod_err}

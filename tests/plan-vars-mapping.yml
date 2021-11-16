@@ -8,10 +8,12 @@ plan:
       seconds: 1
     steps:
     - name: step1
+      step_type: cryton/execute-on-worker
       is_init: true
-      attack_module: mod_cmd
-      attack_module_args:
-          cmd: echo ls
+      arguments:
+        attack_module: mod_cmd
+        attack_module_args:
+            cmd: echo ls
       output_mapping:
         - name_from: cmd_output
           name_to: output
@@ -20,6 +22,8 @@ plan:
         value: OK
         step: step2
     - name: step2
-      attack_module: mod_cmd
-      attack_module_args:
-          cmd: $step1.output
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_cmd
+        attack_module_args:
+            cmd: $step1.output

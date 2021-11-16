@@ -11,7 +11,7 @@ from django.core import exceptions as django_exc
 from django.db.models import Q
 from django.utils import timezone
 import amqpstorm
-from schema import Schema, Optional as SchemaOptional, SchemaError
+from schema import Schema, Optional as SchemaOptional, SchemaError, And, Or
 
 from cryton.cryton_rest_api.models import StepModel, StepExecutionModel, SuccessorModel, ExecutionVariableModel, \
     OutputMapping, CorrelationEvent, WorkerModel
@@ -39,6 +39,45 @@ class StepReport:
     valid: bool
 
 
+@dataclass
+class ArgumentsUtil(object):
+    def update(self, new):
+        for key, value in new.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+    def remove_unused_arguments(self):
+        arguments_dict = asdict(self)
+        for key in list(arguments_dict.keys()):
+            if arguments_dict[key] is None:
+                del arguments_dict[key]
+        return arguments_dict
+
+
+@dataclass
+class StagerArguments(ArgumentsUtil):
+    os_type: str
+    listener_name: str
+    listener_port: int
+    listener_options: dict = None
+    stager_options: dict = None
+
+
+@dataclass
+class StepArguments(ArgumentsUtil):
+    attack_module: str = None
+    attack_module_args: dict = None
+    stager_arguments: StagerArguments = None
+    use_named_session: str = None
+    use_any_session_to_target: str = None
+    create_named_session: str = None
+    session_id: str = None
+    use_agent: str = None
+    shell_command: str = None
+    empire_module: str = None
+    empire_module_args: dict = None
+
+
 class Step:
 
     def __init__(self, **kwargs):
@@ -47,11 +86,11 @@ class Step:
         :param kwargs:
                  step_model_id: int = None,
                  stage_model_id: int = None,
-                 attack_module: str = None,
+                 arguments: str = None,
                  is_init: bool = None,
                  name: str = None
+                 step_type: str = None
                  executor: str = None,
-                 attack_module_args: dict = None
         """
         step_model_id = kwargs.get('step_model_id')
         if step_model_id:
@@ -103,13 +142,13 @@ class Step:
         model.save()
 
     @property
-    def attack_module(self) -> str:
-        return self.model.attack_module
+    def step_type(self) -> str:
+        return self.model.step_type
 
-    @attack_module.setter
-    def attack_module(self, value: str):
+    @step_type.setter
+    def step_type(self, value: str):
         model = self.model
-        model.attack_module = value
+        model.step_type = value
         model.save()
 
     @property
@@ -145,13 +184,13 @@ class Step:
         model.save()
 
     @property
-    def attack_module_args(self) -> dict:
-        return self.model.attack_module_args
+    def arguments(self) -> StepArguments:
+        return StepArguments(**self.model.arguments)
 
-    @attack_module_args.setter
-    def attack_module_args(self, value: dict):
+    @arguments.setter
+    def arguments(self, value: StepArguments):
         model = self.model
-        model.attack_module_args = value
+        model.arguments = asdict(value)
         model.save()
 
     @property
@@ -198,7 +237,60 @@ class Step:
             return StepModel.objects.all()
 
     @staticmethod
-    def validate(step_dict) -> bool:
+    def _validate_cryton_arguments(step_arguments):
+        """
+        Validate arguments in 'cryton/module-execution' step_type
+        """
+        conf_schema = Schema({
+            SchemaOptional(constants.CREATE_NAMED_SESSION): str,
+            SchemaOptional(constants.USE_NAMED_SESSION): str,
+            SchemaOptional(constants.SESSION_ID): int,
+            constants.ATTACK_MODULE: str,
+            constants.ATTACK_MODULE_ARGS: dict
+        })
+
+        conf_schema.validate(step_arguments)
+
+    @staticmethod
+    def _validate_stager_arguments(step_arguments):
+        """
+        Validate arguments in 'empire/deploy-agent' step type
+        """
+        stager_conf_schema = Schema({
+            constants.STAGER_TARGET_OS_TYPE: str,
+            constants.STAGER_LISTENER_NAME: str,
+            constants.STAGER_LISTENER_PORT: int,
+            SchemaOptional(constants.STAGER_LISTENER_OPTIONS): dict,
+            constants.STAGER_TYPE: str,
+            SchemaOptional(constants.STAGER_OPTIONS): dict,
+            constants.AGENT_NAME: str,
+        })
+
+        step_conf_schema = Schema({
+            SchemaOptional(constants.USE_NAMED_SESSION): str,
+            SchemaOptional(constants.SESSION_ID): int,
+            constants.STAGER_ARGUMENTS: dict,
+
+        })
+
+        step_conf_schema.validate(step_arguments)
+        stager_conf_schema.validate(step_arguments.get(constants.STAGER_ARGUMENTS))
+
+    @staticmethod
+    def _validate_execution_on_agent_arguments(step_arguments):
+        """
+        Validate arguments in 'empire/execute-on-agent' step type
+        """
+        conf_schema = Schema({
+            constants.USE_AGENT: str,
+            Or(constants.EMPIRE_MODULE, constants.EMPIRE_SHELL_COMMAND, only_one=True): str,
+            SchemaOptional(constants.EMPIRE_MODULE_ARGS): dict,
+        })
+
+        conf_schema.validate(step_arguments)
+
+    @classmethod
+    def validate(cls, step_dict) -> bool:
         """
         Validate a step dictionary
 
@@ -206,11 +298,15 @@ class Step:
             exceptions.StepValidationError
         :return: True
         """
+
+        step_arguments = step_dict.get(constants.ARGUMENTS)
+        step_type = step_dict.get(constants.STEP_TYPE)
+
         conf_schema = Schema({
             'name': str,
+            'step_type': str,
             SchemaOptional('is_init'): bool,
-            'attack_module': str,
-            'attack_module_args': dict,
+            'arguments': dict,
             SchemaOptional('next'): list,
             SchemaOptional('executor'): str,
             SchemaOptional('output_mapping'): list,
@@ -219,6 +315,12 @@ class Step:
 
         try:
             conf_schema.validate(step_dict)
+            if step_type == constants.STEP_TYPE_EXECUTE_ON_WORKER:
+                cls._validate_cryton_arguments(step_arguments)
+            elif step_type == constants.STEP_TYPE_DEPLOY_AGENT:
+                cls._validate_stager_arguments(step_arguments)
+            elif step_type == constants.STEP_TYPE_EXECUTE_ON_AGENT:
+                cls._validate_execution_on_agent_arguments(step_arguments)
         except SchemaError as ex:
             raise exceptions.StepValidationError(ex, step_name=step_dict.get('name'))
 
@@ -415,20 +517,20 @@ class StepExecution:
         else:
             return StepExecutionModel.objects.all()
 
-    def validate_module(self) -> bool:
+    def validate_cryton_module(self) -> bool:
         """
 
-        Validate attack module arguments
+        Validate cryton attack module arguments
 
         :return:
         """
         logger.logger.debug("Validating Step module", step_id=self.model.step_model_id)
         worker_obj = self.model.stage_execution.plan_execution.worker
-        module_name = self.model.step_model.attack_module.replace('/', '.')
+        step_obj = Step(step_model_id=self.model.step_model_id)
+        module_name = step_obj.arguments.attack_module.replace('/', '.')
         resp = util.validate_attack_module_args(module_name,
-                                                self.model.step_model.attack_module_args,
-                                                worker_obj,
-                                                )
+                                                step_obj.arguments.attack_module_args,
+                                                worker_obj)
         if resp:
             self.valid = True
 
@@ -455,16 +557,16 @@ class StepExecution:
 
         return None
 
-    def _update_dynamic_variables(self, mod_args, parent_step_ex_id):
+    def _update_dynamic_variables(self, step_arguments: dict, parent_step_ex_id: int) -> dict:
         """
         Update dynamic variables in mod_args (even with special $parent prefix)
-        :param mod_args:
-        :param parent_step_ex_id:
-        :return:
+        :param step_arguments: Arguments parameter of step class
+        :param parent_step_ex_id: Id of the parent step of the current step execution
+        :return: Arguments updated for dynamic variables
         """
 
         # Get list of dynamic variables
-        vars_list = util.get_dynamic_variables(mod_args)
+        vars_list = util.get_dynamic_variables(step_arguments)
 
         # Get their prefixes
         prefixes = util.get_prefixes(vars_list)
@@ -481,19 +583,34 @@ class StepExecution:
 
             tmp_dict = dict()
 
-            for step_ex in StepExecutionModel.objects.filter(step_model__output_prefix=prefix,
-                                                             stage_execution__plan_execution=self.model.stage_execution.plan_execution):
+            for step_ex in StepExecutionModel.objects.filter(
+                    step_model__output_prefix=prefix,
+                    stage_execution__plan_execution=self.model.stage_execution.plan_execution
+            ):
                 if step_ex.mod_out is not None:
                     tmp_dict.update(step_ex.mod_out)
 
-            # Change parents prefix back to 'parent' for updating dictionary to susbtitute
+            # Change parents prefix back to 'parent' for updating dictionary to substitute
             if is_parent:
                 prefix = 'parent'
                 is_parent = False
             vars_dict.update({prefix: tmp_dict})
 
-        mod_args = util.fill_dynamic_variables(mod_args, vars_dict)
+        mod_args = util.fill_dynamic_variables(step_arguments, vars_dict)
         return mod_args
+
+    @staticmethod
+    def _update_arguments_with_execution_variables(arguments: dict, execution_vars: list):
+        # Update module arguments with execution variables
+        execution_vars_dict = dict()
+        for execution_var in execution_vars:
+            execution_vars_dict.update({execution_var.get('name'): execution_var.get('value')})
+
+        step_arguments = json.dumps(arguments)
+        step_arguments = util.fill_template(step_arguments, execution_vars_dict)
+        step_arguments = json.loads(step_arguments)
+
+        return step_arguments
 
     def execute(self, rabbit_channel: amqpstorm.Channel = None) -> str:
         """
@@ -516,8 +633,8 @@ class StepExecution:
         self.state = states.RUNNING
 
         # Check if any session should be used
-        use_named_session = step_obj.attack_module_args.get(constants.USE_NAMED_SESSION)
-        use_any_session_to_target = step_obj.attack_module_args.get(constants.USE_ANY_SESSION_TO_TARGET)
+        use_named_session = step_obj.arguments.use_named_session
+        use_any_session_to_target = step_obj.arguments.use_any_session_to_target
         if use_named_session is not None:
             # Throws SessionObjectDoesNotExist
             session_msf_id = session.get_msf_session_id(use_named_session, plan_execution_id)
@@ -547,29 +664,23 @@ class StepExecution:
         else:
             session_msf_id = None
 
-        mod_args = step_obj.attack_module_args
-
-        # Update module arguments with execution variables
         execution_vars = list(ExecutionVariableModel.objects.filter(plan_execution_id=plan_execution_id).values())
+        step_arguments = step_obj.arguments
         if execution_vars:
-            execution_vars_dict = dict()
-            for execution_var in execution_vars:
-                execution_vars_dict.update({execution_var.get('name'): execution_var.get('value')})
-
-            mod_args = json.dumps(mod_args)
-            mod_args = util.fill_template(mod_args, execution_vars_dict)
-            mod_args = json.loads(mod_args)
+            step_arguments.update(self._update_arguments_with_execution_variables(asdict(step_arguments),
+                                                                                  execution_vars))
 
         # Update dynamic variables
-        mod_args = self._update_dynamic_variables(mod_args, self.parent_id)
+        step_arguments.update(self._update_dynamic_variables(asdict(step_arguments), self.parent_id))
 
         if session_msf_id is not None:
-            mod_args.update({constants.SESSION_ID: session_msf_id})
+            step_arguments.session_id = session_msf_id
 
         # Execute Attack module
         try:
-            correlation_id = self._execute_attack_module(rabbit_channel, step_obj.attack_module, mod_args,
-                                                         step_worker_obj, step_obj.model.executor)
+            correlation_id = self._execute_step(rabbit_channel, step_obj.step_type,
+                                                step_arguments.remove_unused_arguments(),
+                                                step_worker_obj, step_obj.model.executor)
         except exceptions.RabbitConnectionError as ex:
             logger.logger.error("Step could not be executed due to connection error: {}".format(ex))
             self.state = states.ERROR
@@ -589,27 +700,34 @@ class StepExecution:
 
         return asdict(report_obj)
 
-    def _execute_attack_module(self, rabbit_channel: amqpstorm.Channel, attack_module: str,
-                               attack_module_arguments: dict, worker_model: WorkerModel, executor: str = None) -> str:
+    def _execute_step(self, rabbit_channel: amqpstorm.Channel, step_type: str, arguments: dict,
+                      step_worker_obj: WorkerModel, executor: str = None) -> str:
         """
         Sends RPC request to execute attack module using RabbitMQ.
 
         :param rabbit_channel: Rabbit channel
-        :param attack_module: Attack module string (dot notation, eg: modules.infrastructure.mod_nmap
-        :param attack_module_arguments: Arguments in form o dictionary
-        :param worker_model: WorkerModel object
+        :param step_type: Type of step that should be executed
+        :param arguments: Arguments in form o dictionary
+        :param step_worker_obj: Instance of worker model for current step execution
         :param executor: Executor address (address:port or address), if desired.
         :return: correlation_id of the sent message
         """
         message_body = {
-            "attack_module": attack_module,
-            "attack_module_arguments": attack_module_arguments,
+            constants.STEP_TYPE: step_type,
+            constants.ARGUMENTS: arguments,
             # "executor": executor
         }
-        target_queue = worker.Worker(worker_model_id=worker_model.id).attack_q_name
+
+        worker_obj = worker.Worker(worker_model_id=step_worker_obj.id)
+        target_queue = worker_obj.attack_q_name
+        reply_queue = config.Q_ATTACK_RESPONSE_NAME
+
+        if step_type == constants.STEP_TYPE_DEPLOY_AGENT:
+            target_queue = worker_obj.agent_q_name
+            reply_queue = config.Q_AGENT_RESPONSE_NAME
 
         with util.Rpc(rabbit_channel) as rpc:
-            correlation_id = rpc.prepare_message(message_body, config.Q_ATTACK_RESPONSE_NAME)
+            correlation_id = rpc.prepare_message(message_body, reply_queue)
             CorrelationEvent.objects.create(correlation_id=correlation_id, step_execution_id=self.model.id,
                                             worker_q_name=target_queue)
 
@@ -718,7 +836,7 @@ class StepExecution:
         step_obj = Step(step_model_id=self.model.step_model.id)
 
         # Check if any named session should be created:
-        create_named_session = step_obj.attack_module_args.get(constants.CREATE_NAMED_SESSION)
+        create_named_session = step_obj.arguments.create_named_session
         if create_named_session is not None:
             msf_session_id = ret_vals.get(constants.RET_SESSION_ID)
             if msf_session_id is not None:

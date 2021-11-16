@@ -10,20 +10,24 @@ plan:
     steps:
     - name: scan-localhost
       is_init: true
-      attack_module: mod_nmap
-      attack_module_args:
-        target: "{{ target }}"
-        ports:
-          - 22
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_nmap
+        attack_module_args:
+          target: "{{ target }}"
+          ports:
+            - 22
       next:
         - type: result
           value: OK
           step: bruteforce
     - name: bruteforce
-      attack_module: mod_medusa
-      attack_module_args:
-        target: "{{ target }}"
-        credentials:
-          username: "{{ username }}"
-          password: "{{ password }}"
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_medusa
+        attack_module_args:
+          target: "{{ target }}"
+          credentials:
+            username: "{{ username }}"
+            password: "{{ password }}"
 

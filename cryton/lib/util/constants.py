@@ -25,12 +25,40 @@ ANY = 'any'
 # Types with allowed regex
 REGEX_TYPES = [STD_OUT, STD_ERR, MOD_OUT, MOD_ERR]
 
-# Step args
-SESSION_ID = 'session_id'
+# Step main args
 ARGUMENTS = 'arguments'
+STEP_TYPE = 'step_type'
+
+# Arguments for step type execute-on-worker
+ATTACK_MODULE = 'attack_module'
+ATTACK_MODULE_ARGS = 'attack_module_args'
+
+# Arguments for step type deploy-agent
+STAGER_ARGUMENTS = 'stager_arguments'
+STAGER_TARGET_OS_TYPE = 'os_type'
+STAGER_LISTENER_NAME = 'listener_name'
+STAGER_LISTENER_PORT = 'listener_port'
+STAGER_LISTENER_OPTIONS = 'listener_options'
+STAGER_TYPE = 'stager_type'
+STAGER_OPTIONS = 'stager_options'
+AGENT_NAME = 'agent_name'
+
+# Arguments for step type execute-on-agent
+USE_AGENT = 'use_agent'
+EMPIRE_MODULE = 'empire_module'
+EMPIRE_MODULE_ARGS = 'empire_module_args'
+EMPIRE_SHELL_COMMAND = 'shell_command'
+
+# Session system keywords
+SESSION_ID = 'session_id'
 CREATE_NAMED_SESSION = 'create_named_session'
 USE_NAMED_SESSION = 'use_named_session'
 USE_ANY_SESSION_TO_TARGET = 'use_any_session_to_target'
+
+# Step types
+STEP_TYPE_EXECUTE_ON_WORKER = 'cryton/execute-on-worker'
+STEP_TYPE_DEPLOY_AGENT = 'empire/deploy-agent'
+STEP_TYPE_EXECUTE_ON_AGENT = 'empire/execute-on-agent'
 
 # Step ret
 RET_SESSION_ID = SESSION_ID
