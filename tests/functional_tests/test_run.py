@@ -75,8 +75,8 @@ class TestRun(TestCase):
         with open(TESTS_DIR + '/plan.yaml') as plan_yaml:
             plan_dict = yaml.safe_load(plan_yaml)
 
-        plan_obj = creator.create_plan(plan_dict)
-        run_obj = run.Run(plan_model_id=plan_obj.model.id, workers_list=self.workers_list)
+        plan_obj_id = creator.create_plan(plan_dict)
+        run_obj = run.Run(plan_model_id=plan_obj_id, workers_list=self.workers_list)
 
         run_obj.execute()
 
@@ -102,8 +102,8 @@ class TestRun(TestCase):
         with open(TESTS_DIR + '/plan.yaml') as plan_yaml:
             plan_dict = yaml.safe_load(plan_yaml)
 
-        plan_obj = creator.create_plan(plan_dict)
-        run_obj = run.Run(plan_model_id=plan_obj.model.id, workers_list=self.workers_list)
+        plan_obj_id = creator.create_plan(plan_dict)
+        run_obj = run.Run(plan_model_id=plan_obj_id, workers_list=self.workers_list)
 
         run_obj.schedule(timezone.now())
 
@@ -113,10 +113,11 @@ class TestRun(TestCase):
         with open(TESTS_DIR + '/complicated-test-plan.yml') as plan_yaml:
             plan_dict = yaml.safe_load(plan_yaml)
 
-        plan_obj = creator.create_plan(plan_dict)
-        worker_obj = creator.create_worker('test', '1.2.3.4')
+        plan_obj_id = creator.create_plan(plan_dict)
+        worker_obj_id = creator.create_worker('test', '1.2.3.4')
+        worker_obj = worker.Worker(worker_model_id=worker_obj_id)
 
-        run_obj = creator.create_run(plan_obj.model.id, [worker_obj.model])
+        run.Run(plan_model_id=plan_obj_id, workers_list=[worker_obj.model])
 
 
 @patch('cryton.lib.util.logger.logger', logger.structlog.getLogger('cryton-test'))
@@ -139,8 +140,8 @@ class TestVariables(TestCase):
         with open(TESTS_DIR + '/plan-vars.yml') as plan_yaml:
             plan_dict = yaml.safe_load(plan_yaml)
 
-        plan_obj = creator.create_plan(plan_dict)
-        run_obj = run.Run(plan_model_id=plan_obj.model.id, workers_list=self.workers_list)
+        plan_obj_id = creator.create_plan(plan_dict)
+        run_obj = run.Run(plan_model_id=plan_obj_id, workers_list=self.workers_list)
 
         # Get StepExecutions
         step_ex_obj = step.StepExecution(step_execution_id=StepExecutionModel.objects.get(
@@ -173,8 +174,8 @@ class TestVariables(TestCase):
         with open(TESTS_DIR + '/plan-vars-prefix.yml') as plan_yaml:
             plan_dict = yaml.safe_load(plan_yaml)
 
-        plan_obj = creator.create_plan(plan_dict)
-        run_obj = run.Run(plan_model_id=plan_obj.model.id, workers_list=self.workers_list)
+        plan_obj_id = creator.create_plan(plan_dict)
+        run_obj = run.Run(plan_model_id=plan_obj_id, workers_list=self.workers_list)
 
         # Get StepExecutions
         step_ex_obj = step.StepExecution(step_execution_id=StepExecutionModel.objects.get(
@@ -207,8 +208,8 @@ class TestVariables(TestCase):
         with open(TESTS_DIR + '/plan-vars-mapping.yml') as plan_yaml:
             plan_dict = yaml.safe_load(plan_yaml)
 
-        plan_obj = creator.create_plan(plan_dict)
-        run_obj = run.Run(plan_model_id=plan_obj.model.id, workers_list=self.workers_list)
+        plan_obj_id = creator.create_plan(plan_dict)
+        run_obj = run.Run(plan_model_id=plan_obj_id, workers_list=self.workers_list)
 
         # Get StepExecutions
         step_ex_obj = step.StepExecution(step_execution_id=StepExecutionModel.objects.get(
@@ -240,8 +241,8 @@ class TestVariables(TestCase):
         with open(TESTS_DIR + '/plan-vars-parent.yml') as plan_yaml:
             plan_dict = yaml.safe_load(plan_yaml)
 
-        plan_obj = creator.create_plan(plan_dict)
-        run_obj = run.Run(plan_model_id=plan_obj.model.id, workers_list=self.workers_list)
+        plan_obj_id = creator.create_plan(plan_dict)
+        run_obj = run.Run(plan_model_id=plan_obj_id, workers_list=self.workers_list)
 
         # Get StepExecutions
         step_ex_obj = step.StepExecution(step_execution_id=StepExecutionModel.objects.get(

@@ -18,6 +18,12 @@ class ApiWrongOrMissingArgument(APIException):
     default_code = 'object_not_found'
 
 
+class ApiObjectConflict(APIException):
+    status_code = 409
+    default_detail = 'Object already exists'
+    default_code = 'object_conflict'
+
+
 class ApiWrongFormat(APIException):
     status_code = 400
     default_detail = 'Wrong input format'

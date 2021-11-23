@@ -1,7 +1,7 @@
 from django.test import TestCase
-from mock import patch, Mock, MagicMock
+from mock import patch, Mock
 
-from cryton.lib.util import creator, exceptions, logger
+from cryton.lib.util import exceptions, logger
 from cryton.lib.models import worker
 
 
@@ -9,7 +9,7 @@ from cryton.lib.models import worker
 class TestWorker(TestCase):
 
     def setUp(self) -> None:
-        self.worker_obj = creator.create_worker('test-name', 'test-address')
+        self.worker_obj = worker.Worker(name='test-name', address='test-address', q_prefix="test-prefix")
 
     def test_incorrect_id(self):
         with self.assertRaises(exceptions.WorkerObjectDoesNotExist):
@@ -20,7 +20,6 @@ class TestWorker(TestCase):
         self.assertEqual(self.worker_obj.address, 'some-address')
 
     def test_properties_q_prefix(self):
-        self.assertEqual(self.worker_obj.q_prefix, self.worker_obj.name + '_' + self.worker_obj.address)
         self.worker_obj.q_prefix = 'new-prefix'
         self.assertEqual(self.worker_obj.q_prefix, 'new-prefix')
 

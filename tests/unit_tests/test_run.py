@@ -27,9 +27,8 @@ class RunTest(TestCase):
         self.plan_model = baker.make(PlanModel)
         self.worker1 = baker.make(WorkerModel, name='worker1')
         self.worker2 = baker.make(WorkerModel, name='worker2')
-        self.worker3 = baker.make(WorkerModel, name='worker3')
 
-        self.workers_list = WorkerModel.objects.filter(name__in=['worker1', 'worker2', 'worker3'])
+        self.workers_list = WorkerModel.objects.filter(name__in=['worker1', 'worker2'])
 
     def test_run_init_nonexistent_plan(self):
         with self.assertRaises(ValueError):
@@ -47,14 +46,11 @@ class RunTest(TestCase):
                                       plan_model_id=self.plan_model.id)
         p_exec_2 = plan.PlanExecution(run_id=run_obj.model.id, worker_id=self.worker2.id,
                                       plan_model_id=self.plan_model.id)
-        p_exec_3 = plan.PlanExecution(run_id=run_obj.model.id, worker_id=self.worker3.id,
-                                      plan_model_id=self.plan_model.id)
         report = run_obj.report()
         self.assertIsInstance(report, dict)
         self.assertEqual(report.get('plan_id'), self.plan_model.id)
         self.assertEqual(report.get('plan_executions')[0].get('worker_id'), p_exec_1.model.worker_id)
         self.assertEqual(report.get('plan_executions')[1].get('worker_id'), p_exec_2.model.worker_id)
-        self.assertEqual(report.get('plan_executions')[2].get('worker_id'), p_exec_3.model.worker_id)
 
     def test_run_list(self):
         run.Run(plan_model_id=self.plan_model.id, workers_list=self.workers_list)

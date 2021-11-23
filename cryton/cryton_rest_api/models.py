@@ -64,7 +64,7 @@ class StepModel(InstanceModel):
         app_label = 'cryton_rest_api'
 
 
-class RunModel(TimeStampedModel):
+class RunModel(TimeStampedModel):  # TODO: TimeStampedModel -> ExecutionModel
     plan_model = models.ForeignKey(PlanModel, on_delete=models.CASCADE, related_name='runs')
     # PENDING, PREPARED, SCHEDULE etc
     state = models.TextField(default=st.PENDING)
@@ -79,8 +79,8 @@ class RunModel(TimeStampedModel):
 class WorkerModel(models.Model):
     name = models.TextField()
     address = models.TextField()
-    q_prefix = models.TextField()
-    state = models.TextField()
+    q_prefix = models.TextField()  # TODO: should be unique?
+    state = models.TextField(default=st.DOWN)
 
 
 class ExecutionModel(TimeStampedModel):
@@ -160,7 +160,7 @@ class CorrelationEvent(models.Model):
     correlation_id = models.TextField()
     # step_execution_id, plan_execution_id, run_id etc.
     step_execution = models.ForeignKey(StepExecutionModel, on_delete=models.CASCADE,
-                                          related_name="correlation_events", null=True)
+                                       related_name="correlation_events", null=True)
     worker_q_name = models.TextField(blank=True, null=True)
     state = models.TextField(default='PENDING')
 
