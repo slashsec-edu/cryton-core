@@ -1,4 +1,3 @@
-import json
 from threading import Thread
 from datetime import datetime
 
@@ -6,8 +5,8 @@ import pytz
 import jinja2
 import yaml
 from django.http import QueryDict
-from rest_framework.viewsets import ModelViewSet, ViewSet
-from rest_framework import status, permissions
+from rest_framework.viewsets import GenericViewSet, ViewSet
+from rest_framework import status, permissions, mixins
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.reverse import reverse
@@ -16,21 +15,9 @@ from drf_yasg import openapi
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
 from cryton.cryton_rest_api import serializers
-from cryton.cryton_rest_api.models import (
-    PlanModel,
-    StageModel,
-    StepModel,
-    RunModel,
-    PlanExecutionModel,
-    StageExecutionModel,
-    StepExecutionModel,
-    WorkerModel,
-    PlanTemplateFileModel,
-    ExecutionVariableModel
-)
-from cryton.cryton_rest_api import (
-    exceptions
-)
+from cryton.cryton_rest_api.models import PlanModel, StageModel, StepModel, RunModel, PlanExecutionModel,\
+    StageExecutionModel, StepExecutionModel, WorkerModel, PlanTemplateFileModel, ExecutionVariableModel
+from cryton.cryton_rest_api import exceptions
 
 from cryton.lib.util import creator, exceptions as core_exceptions, states, util, constants
 from cryton.lib.models import stage, plan, step, worker, run
@@ -107,7 +94,11 @@ def get_start_time(request) -> datetime:
     return start_time
 
 
-class GeneralViewSet(ModelViewSet):
+class GeneralViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, mixins.DestroyModelMixin,
+                     mixins.ListModelMixin, GenericViewSet):
+    """
+    A viewset that provides default `retrieve()`, `update()`, `partial_update()`, `destroy()` and `list()` actions.
+    """
     def get_serializer_class(self):
         assert self.method_serializer_classes is not None, (
                 "Expected view %s should contain method_serializer_classes "
@@ -125,7 +116,15 @@ class GeneralViewSet(ModelViewSet):
     method_serializer_classes = {}
 
 
-class PlanViewSet(GeneralViewSet):
+class AdvancedViewSet(mixins.CreateModelMixin, GeneralViewSet):
+    pass
+
+
+class ExecutionViewSet(AdvancedViewSet):
+    pass
+
+
+class PlanViewSet(AdvancedViewSet):
     """
           list:
           List available Plans
@@ -246,15 +245,15 @@ class PlanViewSet(GeneralViewSet):
 
         # Create Plan Instance
         try:
-            plan_obj = creator.create_plan(yaml.safe_load(plan_dict))
+            plan_obj_id = creator.create_plan(yaml.safe_load(plan_dict))
         except (yaml.YAMLError, AttributeError) as ex:
             raise exceptions.ApiWrongFormat(detail=str(ex))
         except Exception as ex:
             raise exceptions.ApiInternalError(detail=str(ex))
 
-        location_url = reverse('planmodel-detail', args=[plan_obj.model.id], request=request)
+        location_url = reverse('planmodel-detail', args=[plan_obj_id], request=request)
         location_hdr = {'Location': location_url}
-        msg = {'detail': {'plan_model_id': plan_obj.model.id, 'link': location_url}}
+        msg = {'detail': {'plan_model_id': plan_obj_id, 'link': location_url}}
         return Response(msg, status=status.HTTP_201_CREATED, headers=location_hdr)
 
     def destroy(self, request, *args, **kwargs):
@@ -294,13 +293,16 @@ class PlanViewSet(GeneralViewSet):
                 param_name = 'run_id'
             else:
                 param_name = 'worker_id'
-            raise exceptions.ApiWrongOrMissingArgument(param_name=param_name,
-                                                       param_type=int)
-        try:
-            plan_exec = creator.create_plan_execution(plan_model_id=plan_model_id, worker_id=worker_id, run_id=run_id)
-        except core_exceptions.PlanExecutionCreationFailedError as ex:
-            param_name = ex.args
             raise exceptions.ApiWrongOrMissingArgument(param_name=param_name, param_type=int)
+
+        if not PlanModel.objects.filter(id=plan_model_id).exists():
+            raise exceptions.ApiWrongOrMissingArgument(param_name="plan_model_id", param_type=int)
+        if not WorkerModel.objects.filter(id=worker_id).exists():
+            raise exceptions.ApiWrongOrMissingArgument(param_name="worker_id", param_type=int)
+        if not RunModel.objects.filter(id=run_id).exists():
+            raise exceptions.ApiWrongOrMissingArgument(param_name="run_id", param_type=int)
+
+        plan_exec = plan.PlanExecution(plan_model_id=plan_model_id, worker_id=worker_id, run_id=run_id)
 
         thread = Thread(target=plan_exec.execute)
         thread.start()
@@ -370,26 +372,6 @@ class StageViewSet(GeneralViewSet):
         queryset = self.queryset
 
         return queryset
-
-    @swagger_auto_schema(operation_description="Create new Stage.",
-                         responses={201: response_stage_id, 500: response_detail, 400: response_detail})
-    def create(self, request, **kwargs):
-
-        stage_dict = json.loads(request.body.decode("utf-8"))
-        try:
-            plan_model_id = stage_dict.pop("plan_model")
-        except KeyError:
-            raise exceptions.ApiWrongOrMissingArgument(param_name='plan_model_id', param_type='int')
-
-        try:
-            stage_obj = creator.create_stage(stage_dict, plan_model_id)
-        except (core_exceptions.CreationFailedError, KeyError, AttributeError) as ex:
-            raise exceptions.ApiWrongFormat(detail=str(ex))
-
-        location_url = reverse('stagemodel-detail', args=[stage_obj.model.id], request=request)
-        location_hdr = {'Location': location_url}
-        msg = {'detail': {'stage_id': stage_obj.model.id, 'link': location_url}}
-        return Response(msg, status=status.HTTP_201_CREATED, headers=location_hdr)
 
     def destroy(self, request, *args, **kwargs):
         stage_id = kwargs.get('pk')
@@ -508,25 +490,6 @@ class StepViewSet(GeneralViewSet):
 
         return queryset
 
-    @swagger_auto_schema(operation_description="Create new Stage.",
-                         responses={201: response_step_id, 400: response_detail})
-    def create(self, request, **kwargs):
-
-        step_dict = json.loads(request.body.decode("utf-8"))
-        try:
-            stage_model_id = step_dict.pop('stage_model')
-        except KeyError:
-            raise exceptions.ApiWrongOrMissingArgument(param_name='stage_model', param_type='int')
-        try:
-            step_obj = creator.create_step(step_dict, stage_model_id)
-        except core_exceptions.StepCreationFailedError as ex:
-            raise exceptions.APIException(str(ex))
-
-        location_url = reverse('stepmodel-detail', args=[step_obj.model.id], request=request)
-        location_hdr = {'Location': location_url}
-        msg = {'detail': {'step_id': step_obj.model.id, 'link': location_url}}
-        return Response(msg, status=status.HTTP_201_CREATED, headers=location_hdr)
-
     def destroy(self, request, *args, **kwargs):
         step_id = kwargs.get('pk')
         try:
@@ -598,7 +561,7 @@ class StepViewSet(GeneralViewSet):
         return Response(msg, status=status.HTTP_200_OK, headers=location_hdr)
 
 
-class RunViewSet(GeneralViewSet):
+class RunViewSet(AdvancedViewSet):
     """
         list:
         List available Runs
@@ -713,10 +676,11 @@ class RunViewSet(GeneralViewSet):
             raise exceptions.ApiWrongOrMissingArgument(param_name="plan_model", param_type=int, name="Nonexistent Plan"
                                                                                                      " specified")
 
-        run_obj = creator.create_run(plan_model_id=plan_model_id, workers_list=workers_list)
-        location_url = reverse('runmodel-detail', args=[run_obj.model.id], request=request)
+        run_obj_id = run.Run(plan_model_id=plan_model_id, workers_list=workers_list).model.id
+
+        location_url = reverse('runmodel-detail', args=[run_obj_id], request=request)
         location_hdr = {'Location': location_url}
-        msg = {'detail': {'run_model_id': run_obj.model.id, 'link': location_url}}
+        msg = {'detail': {'run_model_id': run_obj_id, 'link': location_url}}
         return Response(msg, status=status.HTTP_201_CREATED, headers=location_hdr)
 
     def destroy(self, request, *args, **kwargs):
@@ -897,10 +861,6 @@ class RunViewSet(GeneralViewSet):
 
         msg = {'detail': '{}'.format("Run {} is terminated.".format(run_model_id))}
         return Response(msg, status=status.HTTP_200_OK)
-
-
-class ExecutionViewSet(GeneralViewSet):
-    pass
 
 
 class PlanExecutionViewSet(ExecutionViewSet):
@@ -1137,7 +1097,7 @@ class StepExecutionViewset(ExecutionViewSet):
         return Response(msg, status=status.HTTP_200_OK)
 
 
-class WorkerViewset(GeneralViewSet):
+class WorkerViewset(AdvancedViewSet):
     """
         list:
         List available WorkerModels
@@ -1190,14 +1150,14 @@ class WorkerViewset(GeneralViewSet):
     def create(self, request, **kwargs):
         try:
             params = {key: request.data.get(key) for key in ('name', 'address', 'q_prefix')}
-            worker_obj = creator.create_worker(**params)
+            worker_obj_id = creator.create_worker(**params)
         except core_exceptions.WrongParameterError as ex:
             raise exceptions.ApiWrongFormat(detail=str(ex))
         except Exception as ex:
             raise exceptions.ApiInternalError(detail=str(ex))
-        location_url = reverse('workermodel-detail', args=[worker_obj.model.id], request=request)
+        location_url = reverse('workermodel-detail', args=[worker_obj_id], request=request)
         location_hdr = {'Location': location_url}
-        msg = {'detail': {'worker_model_id': worker_obj.model.id, 'link': location_url}}
+        msg = {'detail': {'worker_model_id': worker_obj_id, 'link': location_url}}
         return Response(msg, status=status.HTTP_201_CREATED, headers=location_hdr)
 
     @action(methods=["post"], detail=True)
@@ -1212,7 +1172,7 @@ class WorkerViewset(GeneralViewSet):
         return Response(msg, status=status.HTTP_200_OK)
 
 
-class PlanTemplateViewset(GeneralViewSet):
+class PlanTemplateViewset(AdvancedViewSet):
     """
         list:
         List available PlanTemplateModels
@@ -1316,7 +1276,7 @@ class PlanTemplateViewset(GeneralViewSet):
         return Response(msg, status=status.HTTP_201_CREATED)
 
 
-class ExecutionVariableViewset(GeneralViewSet):
+class ExecutionVariableViewset(AdvancedViewSet):
     """
         list:
         List available ExecutionVariables

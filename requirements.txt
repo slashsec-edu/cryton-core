@@ -15,9 +15,10 @@ PyYAML==5.3.1
 rpyc==4.1.5
 schema==0.7.3
 structlog==20.1.0
-pytest==6.1.1
-pytest-cov==2.10.1
-pytest-django==4.0.0
+pytest~=6.2.5
+pytest-cov~=3.0.0
+pytest-django~=4.4.0
+pytest-mock~=3.6.1
 pytz==2020.1
 amqpstorm==2.8.2
 uuid==1.30

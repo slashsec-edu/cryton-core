@@ -194,27 +194,6 @@ class RestStageTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(stages_list, response_stages_list)
 
-    def test_create_stage(self):
-        with open(TESTS_DIR + '/stage.yaml') as stage_yaml:
-            stage_dict = yaml.safe_load(stage_yaml)
-
-        stage_dict.update({"plan_model": self.plan_id})
-        response = self.client.post(reverse("stagemodel-list"), stage_dict,
-                                    content_type="application/json")
-        self.assertEqual(response.status_code, 201)
-        resp_stage_name = stage.Stage(stage_model_id=int(response.data.get('detail').get('stage_id'))).name
-        self.assertEqual(resp_stage_name, stage_dict.get('name'))
-
-        # Wrong format
-        response = self.client.post(reverse("stagemodel-list"), {"stage": "no_dict"},
-                                    content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-
-        stage_dict.update({"plan_model": -50})
-        response = self.client.post(reverse("stagemodel-list"), stage_dict,
-                                    content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-
     def test_delete_stage(self):
         self.assertTrue(StageModel.objects.filter(id=self.stage_id).exists())
         response = self.client.delete(reverse("stagemodel-detail", kwargs={"pk": self.stage_id}))
@@ -293,25 +272,6 @@ class RestStepTest(APITestCase):
         response_steps_list = [step_obj.get('name') for step_obj in response.data.get('results')]
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(steps_list, response_steps_list)
-
-    def test_create_step(self):
-        with open(TESTS_DIR + '/step.yaml') as step_yaml:
-            step_dict = yaml.safe_load(step_yaml)
-
-        # Missing stage_model
-        response = self.client.post(reverse("stepmodel-list"),
-                                    step_dict,
-                                    content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-
-        # Correct stage_model
-        step_dict.update({"stage_model": self.stage_id})
-        response = self.client.post(reverse("stepmodel-list"),
-                                    step_dict,
-                                    content_type="application/json")
-        self.assertEqual(response.status_code, 201)
-        resp_step_name = step.Step(step_model_id=int(response.data.get('detail').get('step_id'))).name
-        self.assertEqual(resp_step_name, step_dict.get('name'))
 
     def test_delete_step(self):
         self.assertTrue(StepModel.objects.filter(id=self.step_id).exists())
@@ -915,11 +875,11 @@ class FilteringTest(APITestCase):
             plan_dict = yaml.safe_load(plan_yaml)
 
         self.client = Client()
-        self.plan_model_obj = creator.create_plan(plan_dict)
+        self.plan_model_obj_id = creator.create_plan(plan_dict)
         self.worker_obj_1 = baker.make(WorkerModel)
         self.worker_obj_2 = baker.make(WorkerModel)
 
-        self.run_obj = run.Run(plan_model_id=self.plan_model_obj.model.id,
+        self.run_obj = run.Run(plan_model_id=self.plan_model_obj_id,
                                workers_list=[self.worker_obj_1, self.worker_obj_2])
 
     def test_filtering_plan(self):

@@ -36,7 +36,7 @@ plan:
         - type: result
           value: OK
           step: whoami-on-agent
-    - name: keylogger-on-agent
+    - name: whoami-on-agent
       step_type: empire/execute-on-agent
       arguments:
         use_agent: MyAgent

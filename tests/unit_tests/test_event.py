@@ -1,9 +1,5 @@
-from cryton.lib.util import creator, logger, states, constants
+from cryton.lib.util import logger, states, constants
 from cryton.lib.models import stage, plan, step, worker, run, event
-
-from cryton.cryton_rest_api.models import (
-    CorrelationEvent
-)
 
 from django.test import TestCase
 
@@ -16,7 +12,7 @@ from model_bakery import baker
 class TestProcess(TestCase):
 
     def setUp(self) -> None:
-        self.worker_obj = creator.create_worker(name='test', address='test')
+        self.worker_obj = worker.Worker(name='test', address='test', q_prefix="test")
 
     # @patch('cryton.lib.models.event.process_list_sessions')
     # @patch('cryton.lib.models.event.process_list_modules')

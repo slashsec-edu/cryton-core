@@ -8,7 +8,7 @@ import os
 
 from cryton.lib.services import listener
 from cryton.lib.util import creator, logger, states
-from cryton.lib.models import stage, plan, step, run
+from cryton.lib.models import stage, plan, step, run, worker
 
 from cryton.cryton_rest_api.models import (
     WorkerModel,
@@ -95,8 +95,8 @@ class TestListener(TestCase):
             plan_dict = yaml.safe_load(plan_yaml)
 
         worker_obj = baker.make(WorkerModel)
-        plan_obj = creator.create_plan(plan_dict)
-        run_obj = run.Run(plan_model_id=plan_obj.model.id, workers_list=[worker_obj])
+        plan_obj_id = creator.create_plan(plan_dict)
+        run_obj = run.Run(plan_model_id=plan_obj_id, workers_list=[worker_obj])
 
         plan_exec_obj = plan.PlanExecution(plan_execution_id=
                                            plan.PlanExecutionModel.objects.get(run_id=run_obj.model.id).id)
@@ -136,7 +136,8 @@ class TestListener(TestCase):
 
     @patch('cryton.lib.util.util.Rpc.__enter__')
     def test_worker_healthcheck(self, mock_rpc):
-        worker_tmp = creator.create_worker('test', 'address', state=states.DOWN)
+        worker_tmp_id = creator.create_worker('test', 'address')
+        worker_tmp = worker.Worker(worker_model_id=worker_tmp_id)
 
         mock_call = Mock()
         mock_call.call = Mock(return_value={'event_v': {'return_code': 0}})

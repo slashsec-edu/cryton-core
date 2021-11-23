@@ -395,13 +395,10 @@ class TestStageExecute(TestCase):
         with open('{}/stage.yaml'.format(TESTS_DIR)) as fp:
             stage_yaml = yaml.safe_load(fp)
 
-        stage_obj = creator.create_stage(stage_yaml, self.plan_model.id)
+        stage_obj_id = creator.create_stage(stage_yaml, self.plan_model.id)
 
-        stage_exec = stage.StageExecution(stage_model_id=stage_obj.model.id,
+        stage_exec = stage.StageExecution(stage_model_id=stage_obj_id,
                                           plan_execution_id=self.plan_ex_model.id)
-        for step_model in stage_obj.model.steps.all():
-            step.StepExecution(stage_execution_id=stage_exec.model.id, step_model=step_model)
-
         stage_exec.execute()
 
     @patch('multiprocessing.Process', MagicMock)

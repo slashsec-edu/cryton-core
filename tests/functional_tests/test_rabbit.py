@@ -5,7 +5,7 @@ import os
 from unittest.mock import patch, MagicMock
 
 from cryton.lib.util import creator, logger, states, util
-from cryton.lib.models import stage, plan, run, step
+from cryton.lib.models import stage, plan, run, worker
 
 from cryton.etc import config
 import threading
@@ -18,7 +18,8 @@ TESTS_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 class TestRabbit(TestCase):
 
     def setUp(self):
-        self.worker = creator.create_worker('tt', '192.168.56.130', 'tt_192.168.56.130', 'UP')
+        worker_id = creator.create_worker('tt', '192.168.56.130', 'tt_192.168.56.130')
+        self.worker = worker.Worker(worker_model_id=worker_id)
         self.workers_list = [self.worker.model]
 
     def test_connection(self):
@@ -30,8 +31,8 @@ class TestRabbit(TestCase):
         with open(TESTS_DIR + '/plan.yaml') as plan_yaml:
             plan_dict = yaml.safe_load(plan_yaml)
 
-        plan_obj = creator.create_plan(plan_dict)
-        run_obj = run.Run(plan_model_id=plan_obj.model.id, workers_list=self.workers_list)
+        plan_obj_id = creator.create_plan(plan_dict)
+        run_obj = run.Run(plan_model_id=plan_obj_id, workers_list=self.workers_list)
         plan_ex_obj = plan.PlanExecution(plan_execution_id=plan.PlanExecutionModel.objects.get(
             run_id=run_obj.model.id).id)
         stage_ex_obj = stage.StageExecution(stage_execution_id=stage.StageExecutionModel.objects.get(

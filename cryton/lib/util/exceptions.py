@@ -352,6 +352,15 @@ class StepCreationFailedError(CreationFailedError):
         super().__init__(self.message)
 
 
+class SuccessorCreationFailedError(CreationFailedError):
+    """Exception raised if Successor creation failed."""
+
+    def __init__(self, message: Union[Exception, str], successor_name: str = None):
+        self.message = {"message": message, "successor_name": successor_name}
+        logger.logger.error("Successor creation failed", successor_name=successor_name, status='fail')
+        super().__init__(self.message)
+
+
 class PlanExecutionCreationFailedError(CreationFailedError):
     """Exception raised if PlanExecution creation failed."""
 
