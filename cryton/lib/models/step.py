@@ -674,7 +674,7 @@ class StepExecution:
         step_arguments.update(self._update_dynamic_variables(asdict(step_arguments), self.parent_id))
 
         if session_msf_id is not None:
-            step_arguments.session_id = session_msf_id
+            step_arguments.attack_module_args.update({constants.SESSION_ID: session_msf_id})
 
         # Execute Attack module
         try:
@@ -731,7 +731,7 @@ class StepExecution:
             CorrelationEvent.objects.create(correlation_id=correlation_id, step_execution_id=self.model.id,
                                             worker_q_name=target_queue)
 
-            response = rpc.call(target_queue, time_limit=10)
+            response = rpc.call(target_queue)
             if response is None:
                 raise exceptions.RabbitConnectionError("No response from Worker.")
             correlation_id = rpc.correlation_id
