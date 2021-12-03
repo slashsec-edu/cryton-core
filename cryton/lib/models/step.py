@@ -56,7 +56,6 @@ class ArgumentsUtil(object):
 
 @dataclass
 class StagerArguments(ArgumentsUtil):
-    os_type: str
     listener_name: str
     listener_port: int
     listener_options: dict = None
@@ -70,6 +69,7 @@ class StepArguments(ArgumentsUtil):
     stager_arguments: StagerArguments = None
     use_named_session: str = None
     use_any_session_to_target: str = None
+    ssh_connection: dict = None
     create_named_session: str = None
     session_id: str = None
     use_agent: str = None
@@ -245,6 +245,7 @@ class Step:
             SchemaOptional(constants.CREATE_NAMED_SESSION): str,
             SchemaOptional(constants.USE_NAMED_SESSION): str,
             SchemaOptional(constants.SESSION_ID): int,
+            SchemaOptional(constants.SSH_CONNECTION): dict,
             constants.ATTACK_MODULE: str,
             constants.ATTACK_MODULE_ARGS: dict
         })
@@ -257,7 +258,6 @@ class Step:
         Validate arguments in 'empire/deploy-agent' step type
         """
         stager_conf_schema = Schema({
-            constants.STAGER_TARGET_OS_TYPE: str,
             constants.STAGER_LISTENER_NAME: str,
             constants.STAGER_LISTENER_PORT: int,
             SchemaOptional(constants.STAGER_LISTENER_OPTIONS): dict,
@@ -269,6 +269,7 @@ class Step:
         step_conf_schema = Schema({
             SchemaOptional(constants.USE_NAMED_SESSION): str,
             SchemaOptional(constants.SESSION_ID): int,
+            SchemaOptional(constants.SSH_CONNECTION): dict,
             constants.STAGER_ARGUMENTS: dict,
 
         })

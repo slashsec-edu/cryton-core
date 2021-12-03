@@ -32,10 +32,10 @@ STEP_TYPE = 'step_type'
 # Arguments for step type execute-on-worker
 ATTACK_MODULE = 'attack_module'
 ATTACK_MODULE_ARGS = 'attack_module_args'
+SSH_CONNECTION = 'ssh_connection'
 
 # Arguments for step type deploy-agent
 STAGER_ARGUMENTS = 'stager_arguments'
-STAGER_TARGET_OS_TYPE = 'os_type'
 STAGER_LISTENER_NAME = 'listener_name'
 STAGER_LISTENER_PORT = 'listener_port'
 STAGER_LISTENER_OPTIONS = 'listener_options'

