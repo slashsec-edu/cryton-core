@@ -65,6 +65,8 @@ user@localhost:~ $ newgrp docker
 user@localhost:~ $ docker run hello-world
 ~~~~
 
+**The following steps are ment for production configuration, which is set by default!**
+
 Now, run docker-compose, which will pull, build and start all necessary docker images:
 ~~~~
 user@localhost:~ $ cd cryton-core/
@@ -81,12 +83,6 @@ Creating listener  ... done
 Creating app       ... done
 ~~~~
 
-After that, you should run database migrations:
-
-~~~~
-user@localhost:~ /cryton-core $ docker-compose exec cryton_app cryton-manage migrate
-~~~~
-
 Everything should be set. Check if the installation was successful by either installing Cryton CLI or testing REST API with curl:
 
 ~~~~
@@ -97,34 +93,61 @@ user@localhost:~ /cryton-core $ curl localhost:8000
 "step_executions":"http://localhost:8000/cryton/api/v1/step_executions/","workers":"http://localhost:8000/cryton/api/v1/workers/"}
 ~~~~
 
-
-### Production
-For production environment, there are some other options needed (such as publishing ports to public IP addressuse, 
-persistent database data volume etc. For production deployment, use:
-~~~~
-docker-compose -f docker-compose.prod.yml up -d
-~~~~ 
-The rest of the steps is the same as above.
-
 ### Development
-For development environment, there is a light version of the production Docker which can be used with a debugger. 
-For development deployment, use:
+For development environment, there is a light version of the production Docker which can be used with a debugger.
+
+First update your `.env` file with:  
+
+- `CRYTON_DB_HOST=cryton_db`
+- `CRYTON_LOGGER=debug`
+
+To **deploy** use:
 ~~~~
 docker-compose -f docker-compose.dev.yml up -d
-~~~~ 
-
-After that, you should run database migrations:
-
-~~~~
-docker-compose exec cryton_app cryton-manage migrate
 ~~~~
 
+After that run **database migrations**:
 
-django run configuration:
-- host: 0.0.0.0  
-- port: 8000  
-- env vars: PYTHONUNBUFFERED=1;DJANGO_SETTINGS_MODULE=cryton.settings  
-- interpreter: docker compose python cryton_app
+~~~~
+docker-compose exec cryton_app python /app/cryton/manage.py migrate
+~~~~
+
+#### Additional steps for setting up PyCharm debugger
+
+**cryton_app configuration**  
+This configuration will allow us to debug code which will be executed by requests from the REST API. 
+Code is automatically reloaded on change.  
+
+First we need to set up interpreter. Go to *File* -> *Settings* -> *Project: cryton-core* -> *Python Interpreter* -> 
+click the settings icon -> click the *add...* button -> select *Docker Compose*.
+1. **Server** - Configure docker server if you haven't done it already (Usually there is no need to do anything. 
+Simply click on *New...* and then on *OK*. That should be enough.)
+2. **Configuration files** - Choose `docker-compose.dev.yml`.
+3. **Service** - Select `cryton_app`
+4. **Python interpreter path** - `python`
+
+Now we can create a **run configuration**:  
+Select *Django Server* template and fill it with the following values:
+- **Name**: `cryton-app`
+- **Host**: `0.0.0.0`
+- **Port**: `8000`
+- **Environment variables**: `PYTHONUNBUFFERED=1;DJANGO_SETTINGS_MODULE=cryton.settings`
+- **Python interpreter**: The one we just created (*Docker Compose cryton_app*).
+
+**cryton_listener configuration**  
+This configuration will allow us to debug code which will be executed through the listener.
+Code must be reloaded manually using *Rerun 'cryton-listener'* button or *Ctrl+F5*.  
+
+First we need to set up interpreter. (**Same as for *cryton_app*, however use cryton_listener as a service**)
+
+Now we can create a **run configuration**:  
+Select *Python* template and fill it with the following values:
+- **Name**: `cryton-listener`
+- **Script path**: `/path/to/cryton-core/cryton/manage.py`
+- **Parameters**: `startlistener`
+- **Environment variables**: `PYTHONUNBUFFERED=1;DJANGO_SETTINGS_MODULE=cryton.settings`
+- **Python interpreter**: The one we just created (*Docker Compose cryton_listener*).
+- **Working directory**: `/path/to/cryton-core/cryton` (should be set automatically)
 
 
 ## From source (manual; not recommended)

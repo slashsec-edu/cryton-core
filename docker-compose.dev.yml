@@ -13,7 +13,7 @@ services:
     ports:
       - "15432:5432"
     env_file:
-      - .env-dev
+      - .env
 
   cryton_app:
     restart: always
@@ -24,12 +24,13 @@ services:
     expose:
       - "8000"
     container_name: "cryton_app"
+    command: ["python", "cryton/manage.py", "runserver", "0.0.0.0:8000"]
     depends_on:
       - cryton_db
     volumes:
       - ./:/app
     env_file:
-      - .env-dev
+      - .env
 
   cryton_rabbit:
     hostname: cryton_rabbit
@@ -37,7 +38,7 @@ services:
     restart: always
     container_name: "cryton_rabbit"
     env_file:
-      - .env-dev
+      - .env
     environment:
       RABBITMQ_DEFAULT_USER: ${CRYTON_RABBIT_USERNAME}
       RABBITMQ_DEFAULT_PASS: ${CRYTON_RABBIT_PASSWORD}
@@ -64,9 +65,9 @@ services:
       - cryton_rabbit
     volumes:
       - ./:/app
-    entrypoint: [ "cryton-manage", "startlistener" ]
+    command: ["python", "cryton/manage.py", "startlistener"]
     env_file:
-      - .env-dev
+      - .env
 
   apache:
     restart: always
@@ -79,4 +80,4 @@ services:
     ports:
       - "$CRYTON_PUBLIC_PORT:80"
     env_file:
-      - .env-dev
+      - .env
