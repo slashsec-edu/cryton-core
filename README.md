@@ -167,6 +167,12 @@ command line or possibly other features are unavailable. To restore the `cryton_
 docker-compose -f docker-compose.dev.yml up -d cryton_app
 ~~~~
 
+Optionally restart the whole docker-compose using:
+
+~~~~
+docker-compose -f docker-compose.dev.yml restart
+~~~~
+
 ## From source (manual; not recommended)
 
 First you need to create database and database tables Cryton internal storage. This database is also used for scheduler and tasks persistence:
