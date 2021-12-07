@@ -101,15 +101,23 @@ First update your `.env` file with:
 - `CRYTON_DB_HOST=cryton_db`
 - `CRYTON_LOGGER=debug`
 
+When managing docker for development we must provide its docker-compose file: `docker-compose -f docker-compose.dev.yml`.
+
 To **deploy** use:
 ~~~~
 docker-compose -f docker-compose.dev.yml up -d
 ~~~~
 
+To be able to use *cryton-manage* command run:
+
+~~~~
+docker-compose exec cryton_app python setup.py egg_info
+~~~~
+
 After that run **database migrations**:
 
 ~~~~
-docker-compose exec cryton_app python /app/cryton/manage.py migrate
+docker-compose exec cryton_app cryton-manage migrate
 ~~~~
 
 #### Additional steps for setting up PyCharm debugger
@@ -134,6 +142,7 @@ Select *Django Server* template and fill it with the following values:
 - **Environment variables**: `PYTHONUNBUFFERED=1;DJANGO_SETTINGS_MODULE=cryton.settings`
 - **Python interpreter**: The one we just created (*Docker Compose cryton_app*).
 
+
 **cryton_listener configuration**  
 This configuration will allow us to debug code which will be executed through the listener.
 Code must be reloaded manually using *Rerun 'cryton-listener'* button or *Ctrl+F5*.  
@@ -149,6 +158,14 @@ Select *Python* template and fill it with the following values:
 - **Python interpreter**: The one we just created (*Docker Compose cryton_listener*).
 - **Working directory**: `/path/to/cryton-core/cryton` (should be set automatically)
 
+
+**Reverting the cryton_app service to its original state**  
+If you already used the *cryton-app* configuration or ran some tests using PyCharm you will find that running tests through 
+command line or possibly other features are unavailable. To restore the `cryton_app` service to its original state use: 
+
+~~~~
+docker-compose -f docker-compose.dev.yml up -d cryton_app
+~~~~
 
 ## From source (manual; not recommended)
 
