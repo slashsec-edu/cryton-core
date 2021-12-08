@@ -1,6 +1,7 @@
 from threading import Thread
 from datetime import datetime
 
+from django.core.exceptions import ObjectDoesNotExist
 import pytz
 import jinja2
 import yaml
@@ -312,6 +313,39 @@ class PlanViewSet(AdvancedViewSet):
 
         msg = {'detail': 'Plan executed', 'plan_execution_id': plan_exec.model.id, 'link': location_url}
         return Response(msg, status=status.HTTP_200_OK, headers=location_hdr)
+
+    response_get_plan = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    "plan_model_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                    "plan": openapi.Schema(type=openapi.TYPE_OBJECT)
+                })
+        }
+    )
+
+    response_err_get_plan = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_STRING
+            )
+        }
+    )
+
+    @swagger_auto_schema(responses={200: response_get_plan, 404: response_err_get_plan})
+    @action(methods=["get"], detail=True)
+    def get_plan(self, _, **kwargs):
+        plan_model_id = kwargs.get("pk")
+        try:
+            plan_dict = util.get_plan_yaml(plan_model_id)
+        except ObjectDoesNotExist:
+            raise exceptions.ApiObjectDoesNotExist(detail=f"Plan with ID {plan_model_id} does not exist.")
+
+        msg = {"detail": {"plan_model_id": plan_model_id, "plan": plan_dict}}
+        return Response(msg, status=status.HTTP_200_OK)
 
 
 class StageViewSet(GeneralViewSet):
@@ -862,6 +896,42 @@ class RunViewSet(AdvancedViewSet):
         msg = {'detail': '{}'.format("Run {} is terminated.".format(run_model_id))}
         return Response(msg, status=status.HTTP_200_OK)
 
+    response_get_plan = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    "run_model_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                    "plan": openapi.Schema(type=openapi.TYPE_OBJECT)
+                })
+        }
+    )
+
+    response_err_get_plan = openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'detail': openapi.Schema(
+                type=openapi.TYPE_STRING
+            )
+        }
+    )
+
+    @swagger_auto_schema(responses={200: response_get_plan, 404: response_err_get_plan})
+    @action(methods=["get"], detail=True)
+    def get_plan(self, _, **kwargs):
+        run_model_id = kwargs.get("pk")
+        try:
+            run_obj = RunModel.objects.get(id=run_model_id)
+        except ObjectDoesNotExist:
+            raise exceptions.ApiObjectDoesNotExist(detail=f"Run with ID {run_model_id} does not exist.")
+
+        plan_model_id = run_obj.plan_model_id
+        plan_dict = util.get_plan_yaml(plan_model_id)
+
+        msg = {"detail": {"run_model_id": run_model_id, "plan": plan_dict}}
+        return Response(msg, status=status.HTTP_200_OK)
+
 
 class PlanExecutionViewSet(ExecutionViewSet):
     """
@@ -1328,23 +1398,16 @@ class ExecutionVariableViewset(AdvancedViewSet):
         try:
             plan_execution_id = util.get_int_from_obj(request.data, 'plan_execution_id')
             inventory_file = request.data.pop('inventory_file')
-        except core_exceptions.WrongParameterError as ex:
+        except KeyError as ex:
             raise exceptions.ApiWrongFormat(detail=str(ex))
-        except KeyError:
-            plan_execution_id = util.get_int_from_obj(request.data, 'plan_execution_id')
-            inventory_file = request.FILES.get('inventory_file')
-            if inventory_file is None:
-                raise exceptions.ApiWrongOrMissingArgument(name="Specify 'inventory_file' in request",
-                                                           param_name='inventory_file', param_type='FILE')
-        except Exception as ex:
-            raise exceptions.ApiInternalError(detail=str(ex))
+
+        if isinstance(inventory_file, str):
+            inventory_file_contents = inventory_file
+        else:
+            inventory_file_contents = inventory_file[0].read()
 
         created_exec_vars = list()
 
-        if isinstance(inventory_file, InMemoryUploadedFile):
-            inventory_file_contents = inventory_file.read()
-        else:
-            inventory_file_contents = inventory_file
         try:
             inventory_dict = util.parse_inventory_file(inventory_file_contents)
         except ValueError as ex:

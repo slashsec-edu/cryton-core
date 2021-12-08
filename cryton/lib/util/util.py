@@ -16,7 +16,7 @@ import jinja2
 import re
 import yaml
 
-from cryton.cryton_rest_api.models import WorkerModel
+from cryton.cryton_rest_api.models import WorkerModel, PlanModel
 from cryton.etc import config
 from cryton.lib.util import exceptions, logger, constants
 from cryton.lib.models import worker
@@ -783,3 +783,28 @@ def get_logs() -> list:
 
     with open(log_file_path, "r") as log_file:
         return [log.rstrip(", \n") for log in log_file]
+
+def get_plan_yaml(plan_model_id: int) -> dict:
+    """
+    Get Plan's YAML (template filled with variables).
+    :param plan_model_id: Plan ID
+    :return: Plan's dictionary
+    """
+    plan_obj = PlanModel.objects.get(id=plan_model_id)
+    plan_dict: dict = plan_obj.plan_dict
+    stages = []
+    for stage_obj in plan_obj.stages.all():
+        steps = []
+        for step_obj in stage_obj.steps.all():
+            step_dict = {"name": step_obj.name, "step_type": step_obj.step_type,
+                         "arguments": step_obj.arguments, "is_init": step_obj.is_init,
+                         "output_prefix": step_obj.output_prefix}
+            steps.append(step_dict)
+
+        stage_dict = {"name": stage_obj.name, "trigger_type": stage_obj.trigger_type,
+                      "trigger_args": stage_obj.trigger_args, "steps": steps}
+        stages.append(stage_dict)
+
+    plan_dict.update({"stages": stages})
+
+    return plan_dict
