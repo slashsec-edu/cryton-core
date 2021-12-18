@@ -1,99 +1,91 @@
-<!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
+[[_TOC_]]
 
-- [Name](#name)
-- [Description](#description)
-- [Dependencies](#dependencies)
-- [Installation](#installation)
-	- [From source](#from-source)
-- [Usage](#usage)
-	- [CLI](#cli)
-	- [Shell](#shell)
-
-<!-- /TOC -->
 ![Coverage](https://gitlab.ics.muni.cz/beast-public/cryton/cryton-core/badges/master/coverage.svg)
-# Name
-**Cryton** - Breach Emulation & Attack Simulation Toolset
 
-# Description
-Cryton is a set of tools for complex attack scenarios automation. Through usage of core and attack modules it provides ways 
-to plan, execute and evaluate multi step attacks.
+# Cryton Core
 
-There are 4 separate projects of Cryton toolset:
-* **Cryton Core**: Contains Cryton Core functions for working with database, task scheduler and execution mechanism.
-* **Cryton Worker**: Contains functions to execute attack modules both locally and remotely.
-* **Cryton Modules**: Contains attack modules that can be executed via Worker.
-* **Cryton CLI**: Command Line Interface for working with Cryton. It uses REST API, which is part of *Cryton Core*.
+## Description
+Cryton Core is the center point of Cryton toolset. It is used for:
+- Creating, planning, and scheduling attack scenarios.
+- Generating reports from attack scenarios.
+- Controlling Workers and scenarios execution.
 
-Cryton is tested and runs best under Kali Linux OS 2019.1 using *root* user.
+## About Cryton
+It is a breach Emulation & Attack Simulation Toolset.
+It is a set of tools for complex attack scenarios' automation. Through usage of core and attack modules it provides ways 
+to plan, execute and evaluate multistep attacks.
 
-# Dependencies
+There are 4 main separate projects of Cryton toolset:
+- **Cryton Core**: Contains Cryton Core functionality for working with database, task scheduler and execution mechanisms.
+- **Cryton Worker**: Contains functionality to execute attack modules both locally and remotely.
+- **Cryton Modules**: Contains attack modules that can be executed via Worker.
+- **Cryton CLI**: Command Line Interface for working with Cryton. It uses REST API, which is part of *Cryton Core*.
 
-## For docker
-* docker.io
-* docker-compose
+[Link to the documentation](https://beast-public.gitlab-pages.ics.muni.cz/cryton/cryton-documentation/).
 
-## For manual installation
-Cryton uses **PostgreSQL** as it's internal database, so this must be installed and started on your system. So far the only 
-supported OS is **Kali Linux**, preferably 2019.1 stable release. Additionally there are some other dependencies. Please 
-check you have following tools/packages installed:
-* python3.7
-* (optional) pipenv
-* postgresql
-* libpq5
-* libpq-dev
+## Installation
+Important note: this guide only explains how to install the **Cryton Core** package. To be able to execute the attack 
+scenarios, you also need to install the **[Cryton Worker](https://gitlab.ics.muni.cz/beast-public/cryton/cryton-worker)** 
+and **[Cryton CLI](https://gitlab.ics.muni.cz/beast-public/cryton/cryton-cli)** package. Optionally you can also install
+[Cryton Frontend](https://gitlab.ics.muni.cz/beast-public/cryton/cryton-frontend) for non-command line experience.
 
-# Installation
+### Using Docker Compose - for production (recommended)
 
-Important note: this guide only explains how to install **Cryton Core** package. For being able to execute the attack 
-scenarios, you also need to install the **Cryton Worker** package. If you want to use attack modules provided by Cryton, 
-you have to also install **Cryton Modules**.
+**Dependencies**
+- docker.io
+- docker-compose
 
-## Docker (recommended)
+First make sure you have installed dependencies:
+```
+sudo apt install docker.io docker-compose
+``` 
 
-First make sure you have Docker installed:
+Add yourself to the group *docker*, so you can work with Docker CLI without sudo:
+```
+sudo groupadd docker
+sudo usermod -aG docker $USER
+newgrp docker 
+docker run hello-world
+```
 
-~~~~
-user@localhost:~ $ sudo apt install docker.io docker-compose
-~~~~ 
+For correct installation you need to update `.env` file. For example, you should change default credentials. For more 
+information about *Cryton Worker* settings go to the [settings section](#settings).
 
-Add yourself to the group docker so you can work with docker CLI without sudo:
-
-~~~~
-user@localhost:~ $ sudo groupadd docker
-user@localhost:~ $ sudo usermod -aG docker $USER
-user@localhost:~ $ newgrp docker 
-user@localhost:~ $ docker run hello-world
-~~~~
-
-**The following steps are ment for production configuration, which is set by default!**
+**!The following steps are ment for production configuration, which is set by default!**
 
 Now, run docker-compose, which will pull, build and start all necessary docker images:
-~~~~
-user@localhost:~ $ cd cryton-core/
-user@localhost:~ /cryton-core $ docker-compose up -d
-~~~~
+```
+cd cryton-core/
+docker-compose up -d
+```
 
-This process might take a while, especially if it is the first time you run it - Cryton image must be built.
+This process might take a while, especially if it is the first time you run it - images must be built.
 After a while you should see something like this:
-~~~~
-Creating db     ... done
-Creating rabbit ... done
-Creating scheduler ... done
-Creating listener  ... done
-Creating app       ... done
-~~~~
+```
+Creating cryton_db         ... done
+Creating cryton_pgbouncer  ... done
+Creating cryton_rabbit     ... done
+Creating cryton_apache     ... done
+Creating cryton_listener   ... done
+Creating cryton_app        ... done
+```
 
-Everything should be set. Check if the installation was successful by either installing Cryton CLI or testing REST API with curl:
+Everything should be set. Check if the installation was successful by either installing Cryton CLI or testing REST API 
+with curl:
+```
+curl localhost:8000
+```
 
-~~~~
-user@localhost:~ /cryton-core $ curl localhost:8000
+Expected result:
+```
 {"runs":"http://localhost:8000/cryton/api/v1/runs/","plans":"http://localhost:8000/cryton/api/v1/plans/",
 "plan_executions":"http://localhost:8000/cryton/api/v1/plan_executions/","stages":"http://localhost:8000/cryton/api/v1/stages/",
 "stage_executions":"http://localhost:8000/cryton/api/v1/stage_executions/","steps":"http://localhost:8000/cryton/api/v1/steps/",
 "step_executions":"http://localhost:8000/cryton/api/v1/step_executions/","workers":"http://localhost:8000/cryton/api/v1/workers/"}
-~~~~
+```
 
-### Development
+
+### Using Docker Compose - for development
 For development environment, there is a light version of the production Docker which can be used with a debugger.
 
 First update your `.env` file with:  
@@ -104,25 +96,25 @@ First update your `.env` file with:
 When managing docker for development we must provide its docker-compose file: `docker-compose -f docker-compose.dev.yml`.
 
 To **deploy** use:
-~~~~
+```
 docker-compose -f docker-compose.dev.yml up -d
-~~~~
+```
 
 To be able to use *cryton-manage* command run:
 
-~~~~
+```
 docker-compose exec cryton_app python setup.py egg_info
-~~~~
+```
 
 After that run **database migrations**:
 
-~~~~
+```
 docker-compose exec cryton_app cryton-manage migrate
-~~~~
+```
 
 #### Additional steps for setting up PyCharm debugger
 
-**cryton_app configuration**  
+##### cryton_app configuration  
 This configuration will allow us to debug code which will be executed by requests from the REST API. 
 Code is automatically reloaded on change.  
 
@@ -143,7 +135,7 @@ Select *Django Server* template and fill it with the following values:
 - **Python interpreter**: The one we just created (*Docker Compose cryton_app*).
 
 
-**cryton_listener configuration**  
+##### cryton_listener configuration  
 This configuration will allow us to debug code which will be executed through the listener.
 Code must be reloaded manually using *Rerun 'cryton-listener'* button or *Ctrl+F5*.  
 
@@ -159,144 +151,105 @@ Select *Python* template and fill it with the following values:
 - **Working directory**: `/path/to/cryton-core/cryton` (should be set automatically)
 
 
-**Reverting the cryton_app service to its original state**  
+##### Reverting the cryton_app service to its original state  
 If you already used the *cryton-app* configuration or ran some tests using PyCharm you will find that running tests through 
 command line or possibly other features are unavailable. To restore the `cryton_app` service to its original state use: 
 
-~~~~
+```
 docker-compose -f docker-compose.dev.yml up -d cryton_app
-~~~~
+```
 
 Optionally restart the whole docker-compose using:
 
-~~~~
+```
 docker-compose -f docker-compose.dev.yml restart
-~~~~
-
-## From source (manual; not recommended)
-
-First you need to create database and database tables Cryton internal storage. This database is also used for scheduler and tasks persistence:
-~~~~
-user@localhost:~ $ sudo su postgres
-postgres@localhost:~ $ psql -c "CREATE DATABASE cryton;"
-postgres@localhost:~ $ psql -c "CREATE USER cryton WITH PASSWORD 'cryton';GRANT ALL PRIVILEGES ON DATABASE cryton TO cryton;ALTER DATABASE cryton OWNER TO cryton; ALTER USER cryton CREATEDB;";
-postgres@localhost:~ $ exit
-~~~~
-
-## From source
-
-Please clone respective git repositories and install them using setuptools. You can use pipenv for creating virtual environment.
-
-
-First, obtain the source:
-
-```
-root@localhost:~ $ git clone <cryton-repo>; cd cryton-oop
 ```
 
-Then create the virtual environment using Pipenv:
+### Using virtual environment (NOT RECOMMENDED)
+It is possible to install Cryton Core without using docker, however it isn't supported since it takes many steps. If you 
+still want to do it, you will have to reverse engineer the docker-compose file or create a ticket, if you want us to 
+support this type of installation.
+
+## Settings
+Cryton Core uses environment variables for its settings. Please update variables for your use case.
+```
+CRYTON_RABBIT_USERNAME=admin
+CRYTON_RABBIT_PASSWORD=mypass
+CRYTON_RABBIT_SRV_ADDR=cryton_rabbit
+CRYTON_RABBIT_SRV_PORT=5672
+CRYTON_DB_NAME=cryton
+CRYTON_DB_USERNAME=cryton
+CRYTON_DB_PASSWORD=cryton
+CRYTON_DB_HOST=cryton_pgbouncer
+Q_ATTACK_RESPONSE_NAME=cryton_core.attack.response
+Q_AGENT_RESPONSE_NAME=cryton_core.agent.response
+Q_CONTROL_RESPONSE_NAME=cryton_core.control.response
+Q_EVENT_RESPONSE_NAME=cryton_core.event.response
+Q_CONTROL_REQUEST_NAME=cryton_core.control.request
+CRYTON_LOGGER=prod
+CRYTON_PUBLIC_PORT=8000
+CRYTON_TZ=UTC
+CRYTON_RPC_TIMEOUT=1200
 
 ```
-root@localhost:~/cryton-oop$ pipenv shell # has to be virtual environment with python3.7
-```
 
-Use setup.py to install the package:
-```
-(cryton-oop) root@localhost:~/cryton-oop$ python setup.py install
-```
+To update environment variable, update the `.env` file in the *cryton-core* directory **before starting the docker image**.
 
-Edit the configuration files in /etc/cryton according to your preferences.
+Settings description: 
+- `CRYTON_RABBIT_USERNAME` - (**string**) RabbitMQ's username used for connection
+- `CRYTON_RABBIT_PASSWORD` - (**string**) RabbitMQ's password used for connection
+- `CRYTON_RABBIT_SRV_ADDR` - (**string**) RabbitMQ's address used for connection (**do not change, if you don't know what you're doing**)
+- `CRYTON_RABBIT_SRV_PORT` - (**int**) RabbitMQ's port used for connection (**do not change, if you don't know what you're doing**)
+- `CRYTON_DB_NAME` - (**string**) Database name used for connection (**do not change, if you don't know what you're doing**)
+- `CRYTON_DB_USERNAME` - (**string**) Database username used for connection
+- `CRYTON_DB_PASSWORD` - (**string**) Database password used for connection
+- `CRYTON_DB_HOST` - (**int**) Database host used for connection (**do not change, if you don't know what you're doing**)
+- `Q_ATTACK_RESPONSE_NAME` - (**string**) Rabbit queue where responses from attack modules should return 
+(**do not change, if you don't know what you're doing**)
+- `Q_AGENT_RESPONSE_NAME` - (**string**) Rabbit queue where responses from agent control requests should return 
+(**do not change, if you don't know what you're doing**)
+- `Q_CONTROL_RESPONSE_NAME` - (**string**) Rabbit queue where responses from Worker control requests should return 
+(**do not change, if you don't know what you're doing**)
+- `Q_EVENT_RESPONSE_NAME` - (**string**) Rabbit queue where responses from events should return 
+(**do not change, if you don't know what you're doing**)
+- `Q_CONTROL_REQUEST_NAME` - (**string**) Rabbit queue where control requests should be sent 
+(**do not change, if you don't know what you're doing**)
+- `CRYTON_LOGGER` - (**string**) What logger should be used (prod - only info logs and higher/debug - any logs)
+- `CRYTON_PUBLIC_PORT` - (**int**) (**do not change, if you don't know what you're doing**)
+- `CRYTON_TZ` - (**string**) Internally used timezone (**do not change, if you don't know what you're doing**)
+- `CRYTON_RPC_TIMEOUT` - (**int**) Timeout for RabbitMQ RPC requests (**do not change, if you don't know what you're doing**)
 
-Also, if you are not running Cryton in Docker environment, you have to change the default hostname of machine where the database is running. In this case, when installing locally, you should change it to 'localhost' in /etc/cryton/config.ini:
-~~~~
-[CRYTON]
-DB_NAME: cryton
-DB_USERNAME: cryton
-DB_PASSWORD: cryton
-DB_HOST: db <---- Change this to 'localhost'
-~~~~
+## Usage
+In order to be able to control Cryton Core, you have to send requests to its REST API. This can be done manually, or via 
+[Cryton CLI](https://gitlab.ics.muni.cz/beast-public/cryton/cryton-cli) or 
+[Cryton Frontend](https://gitlab.ics.muni.cz/beast-public/cryton/cryton-frontend).
 
-This also applies to Scheduler service, which will run on localhost as well. This option is also in /etc/cryton/config.ini:
+### REST API
+REST API is the only way to communicate with Cryton Core. It is by default running at 
+[http://0.0.0.0:8000](http://0.0.0.0:8000). And its interactive documentation can be found at 
+[http://0.0.0.0:8000/doc](http://0.0.0.0:8000/doc).
 
-~~~~
-[SCHEDULER]
-LHOSTNAME=scheduler <---- Change this to 'localhost'
-LPORT=12345
-USE_PROCESS_POOL: False
-MISFIRE_GRACE_TIME: 60
-~~~~
-
-After successful installation the only thing needed is Django _migration_ for creating default tables in Cryton database:
-
-```
-(cryton-oop) user@localhost:~/cryton-oop$ cryton-manage migrate
-```
-To check if installation was successfull try to start the REST API:
-
-~~~~
-
-(cryton-oop) root@kali:/opt/cryton$ cryton-manage runserver
-Watching for file changes with StatReloader
-Performing system checks...
-
-System check identified no issues (0 silenced).
-May 25, 2020 - 06:38:32
-Django version 3.0.5, using settings 'cryton.settings'
-Starting development server at http://127.0.0.1:8000/
-Quit the server with CONTROL-C.
-
-~~~~
-
-# Usage
-
+### Execution example
 Every Cryton plan run can be described by simple formula:
-~~~~
+```
 Plan Template + Variables = Plan Instance
 Plan Instance + Workers = Plan Run
-~~~~
+```
 
-## 1. Choose or Design a Plan Template
-
+**1. Choose or Design a Plan Template**  
 Choose one of the YAML Plan Templates or design your own.
 
-## 2. Create a Plan Instance
+**2. Create a Plan Instance**  
+Plan Templates can utilize a number of variables that need to be provided during Instantiation process. Do this by 
+specifying a Variables file.
 
-Plan Templates can utilize a number of variables that need to be provided during Instantiation process. Do this by specifying a Variables file.
-
-## 3. Create a Run
-
+**3. Create a Run**  
 Create a Run by choosing Plan Instance and providing list of Workers for execution.
 
-## 4. Schedule or Execute a Run
+**4. Schedule or Execute a Run**  
+You can either Schedule the Run for specific date/time, or execute it directly. Run will then be executed on every 
+Worker simultaneously.
 
-You can either Schedule the Run for specific date/time, or execute it directly. Run will then be executed on every Worker simultaneously.
-
-## 5. Read the Report
-
-Anytime during running of cryton the output file can be generated, which also complies to YAML format, and it contains list of Stages/Steps, their success and output or, if available, error message.
-
-### Complete Execution
-
-There are 3 actions you need to do to execute your plan:
-* **Create** the Run
-* **Start** scheduler service
-* **Start** Worker
-* **Run** the plan
-
-First step (or steps) is described in sections above.
-
-Second step is running the Worker service. Do not forget to run this inside _separate pipenv_:
-
-~~~~
-(cryton-worker) user@localhost:/opt/cryton-worker$ cryton-worker
-Starting server. Listening on 127.0.0.1:50666
-~~~~
-
-Third step is starting the scheduler service. Scheduler will now listen on a local TCP port for RPC connections from Cryton Core:
-
-~~~~
-(cryton) user@localhost:/opt/cryton$ cryton-manage startscheduler
-Starting scheduler service. Listening on 127.0.0.1:12345
-~~~~
-
-Last step is running the plan. For that you need **Cryton CLI**. Follow instructions in its README file: https://gitlab.ics.muni.cz/cryton/cryton-cli
+**5. Read the Report**  
+Anytime during running of cryton the output file can be generated, which also complies to YAML format, and it contains 
+list of Stages/Steps and their results.

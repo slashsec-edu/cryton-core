@@ -5,13 +5,13 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(name='cryton',
-      version='2021.2.1',
+      version='2021.4.1',
       description='Cryton - Attack scenario automation toolset',
       url='https://gitlab.ics.muni.cz/beast-public/cryton/cryton-core',
-      author='Ivo Nutar, Jiri Raja, Andrej Tomci',
-      author_email='nutar@ics.muni.cz, 469429@mail.muni.cz, 469192@mail.muni.cz',
+      author='Ivo Nutar, Jiri Raja, Andrej Tomci, Milan Bohacek',
+      author_email='nutar@ics.muni.cz, 469429@mail.muni.cz, 469192@mail.muni.cz, 244656@mail.muni.cz',
       packages=find_packages(),
-      python_requires='>3.8',
+      python_requires='>=3.8',
       install_requires=requirements,
       zip_safe=False,
       data_files=[(expanduser('~/.cryton/'), []),
