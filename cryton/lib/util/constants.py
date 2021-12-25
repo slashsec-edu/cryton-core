@@ -69,6 +69,7 @@ EVIDENCE_FILE = 'evidence_file'
 
 # Stage trigger types
 DELTA = 'delta'
+DATETIME = 'datetime'
 HTTP_LISTENER = 'HTTPListener'
 MSF_LISTENER = 'MSFListener'
 

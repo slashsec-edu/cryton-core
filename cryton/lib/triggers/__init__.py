@@ -9,6 +9,7 @@ from cryton.lib.triggers.trigger_base import TriggerBase
 from cryton.lib.triggers.trigger_delta import TriggerDelta
 from cryton.lib.triggers.trigger_http import TriggerHTTP
 from cryton.lib.triggers.trigger_msf import TriggerMSF
+from cryton.lib.triggers.trigger_datetime import TriggerDateTime
 
 
 class TriggerTypeMeta(EnumMeta):
@@ -29,3 +30,4 @@ class TriggerType(Enum, metaclass=TriggerTypeMeta):
     delta = TriggerDelta
     HTTPListener = TriggerHTTP
     MSFListener = TriggerMSF
+    datetime = TriggerDateTime
