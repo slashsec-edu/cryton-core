@@ -1,0 +1,26 @@
+---
+plan:
+  name: Basic example
+  owner: test name
+  stages:
+  - name: stage-one
+    trigger_type: datetime
+    trigger_args:
+      # all arguments are optional and default value is used in their absence
+      timezone: Europe/Prague # default is UTC
+      year: 2022 # default is the year of the plan execution in the specified timezone
+      month: 1 # default is the month of the plan execution in the specified timezone
+      day: 1 # default is the day of the plan execution in the specified timezone
+      hour: 16 # default is 00
+      minute: 00 # this is default
+      second: 00 # this is default
+    steps:
+    - name: scan-localhost
+      is_init: true
+      step_type: cryton/execute-on-worker
+      arguments:
+        attack_module: mod_nmap
+        attack_module_args:
+          target: 127.0.0.1
+          ports:
+            - 22

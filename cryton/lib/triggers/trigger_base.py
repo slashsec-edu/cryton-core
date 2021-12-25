@@ -1,9 +1,11 @@
-import schema
+from datetime import datetime
 from django.utils import timezone
+import schema
 
 from cryton.lib.models import stage, worker, step
 from cryton.lib.util import constants, states, logger
 from cryton.lib.util.util import Rpc, exceptions
+from cryton.lib.util import constants as co, exceptions, logger, scheduler_client, states as st
 
 
 class TriggerBase:
@@ -31,7 +33,7 @@ class TriggerBase:
         Unpause stage execution.
         :return: None
         """
-        logger.logger.info("stageexecution unpausing", stage_execution_id=self.stage_execution_id)
+        logger.logger.info("stage execution unpausing", stage_execution_id=self.stage_execution_id)
         states.StageStateMachine(self.stage_execution.model.id).validate_state(self.stage_execution.state,
                                                                                states.STAGE_UNPAUSE_STATES)
 
@@ -47,6 +49,90 @@ class TriggerBase:
         else:
             for step_exec in self.stage_execution.model.step_executions.filter(state=states.PAUSED):
                 step.StepExecution(step_execution_id=step_exec.id).execute()
+
+
+class TriggerTime(TriggerBase):
+    def __init__(self, stage_execution):
+        """
+        :param stage_execution: StageExecution's object
+        """
+        super().__init__(stage_execution)
+
+    def start(self) -> None:
+        """
+        Runs schedule() method.
+        :return: None
+        """
+        self.schedule()
+
+    def stop(self) -> None:
+        """
+        Runs unschedule() method.
+        :return: None
+        """
+        try:
+            self.unschedule()
+        except exceptions.InvalidStateError as err:
+            logger.logger.warning(str(err))
+
+    def schedule(self) -> None:
+        """
+        Schedule stage execution.
+        :return: None
+        """
+
+        st.StageStateMachine(self.stage_execution_id).validate_state(self.stage_execution.state,
+                                                                     st.STAGE_SCHEDULE_STATES)
+        if self.stage_execution.model.stage_model.trigger_type not in [co.DELTA, co.DATETIME]:
+            raise exceptions.UnexpectedValue(
+                'StageExecution with ID {} cannot be scheduled due to not having delta or datetime parameter'.format(
+                    self.stage_execution_id)
+            )
+
+        schedule_time = self._create_schedule_time()
+        self.stage_execution.schedule_time = schedule_time
+        self.stage_execution.pause_time = None
+        self.stage_execution.state = st.SCHEDULED
+        self.stage_execution.aps_job_id = scheduler_client.schedule_function(
+            "cryton.lib.models.stage:execution", [self.stage_execution_id], schedule_time)
+
+        logger.logger.info("stage execution scheduled", stage_execution_id=self.stage_execution_id,
+                           stage_name=self.stage_execution.model.stage_model.name, status='success')
+
+    def unschedule(self) -> None:
+        """
+        Unschedule StageExecution from a APScheduler.
+        :raises:
+            ConnectionRefusedError
+        :return: None
+        """
+        st.StageStateMachine(self.stage_execution_id).validate_state(self.stage_execution.state,
+                                                                     st.STAGE_UNSCHEDULE_STATES)
+
+        scheduler_client.remove_job(self.stage_execution.aps_job_id)
+        self.stage_execution.aps_job_id, self.stage_execution.schedule_time = None, None
+        self.stage_execution.state = st.PENDING
+
+        logger.logger.info("stage execution unscheduled", stage_execution_id=self.stage_execution_id,
+                           stage_name=self.stage_execution.model.stage_model.name, status='success')
+
+    def pause(self) -> None:
+        """
+        Pause stage execution.
+        :return: None
+        """
+        if self.stage_execution.state in st.STAGE_UNSCHEDULE_STATES:
+            self.unschedule()
+            self.stage_execution.pause_time = timezone.now()
+
+        # If stage is RUNNING, set PAUSING state. It will be PAUSED once the currently
+        # RUNNING step finished and listener gets it's return value
+        elif self.stage_execution.state == st.RUNNING:
+            logger.logger.info("stage execution pausing", stage_execution_id=self.stage_execution_id)
+            self.stage_execution.state = st.PAUSING
+
+    def _create_schedule_time(self) -> datetime:
+        pass
 
 
 class TriggerWorker(TriggerBase):
@@ -105,5 +191,5 @@ class TriggerWorker(TriggerBase):
         # If stage is RUNNING, set PAUSING state. It will be PAUSED once the currently
         # RUNNING step finished and listener gets it's return value
         if self.stage_execution.state == states.RUNNING:
-            logger.logger.info("stageexecution pausing", stage_execution_id=self.stage_execution_id)
+            logger.logger.info("stage execution pausing", stage_execution_id=self.stage_execution_id)
             self.stage_execution.state = states.PAUSING

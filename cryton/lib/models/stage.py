@@ -19,7 +19,7 @@ from cryton.cryton_rest_api.models import (
 
 from cryton.lib.util import exceptions, logger, states as st, util
 
-from cryton.lib.triggers import TriggerType, TriggerDelta, TriggerHTTP, TriggerMSF
+from cryton.lib.triggers import TriggerType, TriggerDelta, TriggerHTTP, TriggerMSF, TriggerDateTime
 
 from cryton.lib.models.step import (
     StepExecution,
@@ -365,7 +365,7 @@ class StageExecution:
         model.save()
 
     @property
-    def trigger(self) -> Union[TriggerDelta, TriggerHTTP, TriggerMSF]:
+    def trigger(self) -> Union[TriggerDelta, TriggerHTTP, TriggerMSF, TriggerDateTime]:
         trigger_type = self.model.stage_model.trigger_type
         return TriggerType[trigger_type].value(stage_execution=self)
 

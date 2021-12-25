@@ -596,7 +596,7 @@ class TestStepExecute(TestCase):
     def test_execute_named_session(self):
         self.mock_step_init.stop()
         rabbit_channel = MagicMock()
-        self.step_model_obj.arguments = {constants.ATTACK_MODULE_ARGS: {}, 
+        self.step_model_obj.arguments = {constants.ATTACK_MODULE_ARGS: {},
                                          constants.USE_NAMED_SESSION: 'test-session'}
         self.step_model_obj.save()
         with self.assertLogs('cryton-debug', level='INFO'):
@@ -605,7 +605,7 @@ class TestStepExecute(TestCase):
     def test_execute_any_session(self):
         self.mock_step_init.stop()
         rabbit_channel = MagicMock()
-        self.step_model_obj.arguments = {constants.ATTACK_MODULE_ARGS: {}, 
+        self.step_model_obj.arguments = {constants.ATTACK_MODULE_ARGS: {},
                                          constants.USE_ANY_SESSION_TO_TARGET: 'target'}
         self.step_model_obj.save()
         self.mock_get_session_ids.return_value = [1]

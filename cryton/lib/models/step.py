@@ -675,7 +675,9 @@ class StepExecution:
         step_arguments.update(self._update_dynamic_variables(asdict(step_arguments), self.parent_id))
 
         if session_msf_id is not None:
-            step_arguments.attack_module_args.update({constants.SESSION_ID: session_msf_id})
+            step_arguments.session_id = session_msf_id
+            if step_obj.step_type == constants.STEP_TYPE_EXECUTE_ON_WORKER:
+                step_arguments.attack_module_args.update({constants.SESSION_ID: session_msf_id})
 
         # Execute Attack module
         try:

