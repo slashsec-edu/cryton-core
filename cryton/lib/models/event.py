@@ -3,7 +3,7 @@ import dataclasses
 from typing import Type, Union
 
 from cryton.cryton_rest_api.models import (
-    CorrelationEvent,
+    CorrelationEvent, SessionModel,
 )
 from cryton.lib.util import constants, logger, states
 from cryton.lib.models import plan, step, worker, run, stage, session
@@ -115,7 +115,12 @@ def process_trigger(event_obj: Event) -> None:
 
     elif stage_ex.model.stage_model.trigger_type == constants.MSF_LISTENER and stage_ex.state == states.AWAITING:
         session_name = f"{stage_ex.model.stage_model.name}_session"
-        session.create_session(stage_ex.model.plan_execution_id, event_obj.event_v.get("parameters"), session_name)
+
+        # TODO_SIEMENS: When using MSF_LISTENER send also msf-session-type within event. Here hard-coded.
+        session_type = SessionModel.MSF_SHELL_TYPE
+
+        session.create_session(stage_ex.model.plan_execution_id, event_obj.event_v.get("parameters"), session_name,
+                               session_type)
         stage_ex.execute()
 
     else:

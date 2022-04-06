@@ -23,7 +23,9 @@ class TestSession(TestCase):
         self.plan_exec_obj = baker.make(PlanExecutionModel)
         self.named_session_obj = SessionModel.objects.create(plan_execution=self.plan_exec_obj,
                                                              session_id='42',
-                                                             session_name='test-session')
+                                                             session_name='test-session',
+                                                             session_type=SessionModel.MSF_SHELL_TYPE
+                                                             )
         self.step_model = baker.make(StepModel)
 
         pass
@@ -33,8 +35,10 @@ class TestSession(TestCase):
         with self.assertRaises(exceptions.PlanExecutionDoesNotExist):
             session.create_session(0, '0', 'test')
 
-        sess_obj = session.create_session(self.plan_exec_obj.id, '0', 'test')
+        sess_obj = session.create_session(self.plan_exec_obj.id, '0', 'test', SessionModel.MSF_SHELL_TYPE)
         self.assertEqual(sess_obj.session_name, 'test')
+        self.assertEqual(sess_obj.session_type, SessionModel.MSF_SHELL_TYPE)
+
 
     def test_get_msf_session_id(self):
 

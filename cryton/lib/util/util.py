@@ -797,7 +797,7 @@ def get_plan_yaml(plan_model_id: int) -> dict:
         steps = []
         for step_obj in stage_obj.steps.all():
             step_dict = {"name": step_obj.name, "step_type": step_obj.step_type,
-                         "arguments": step_obj.arguments, "is_init": step_obj.is_init,
+                         "arguments": step_obj.arguments, "comment": step_obj.comment, "is_init": step_obj.is_init,
                          "output_prefix": step_obj.output_prefix}
             steps.append(step_dict)
 

@@ -10,22 +10,24 @@ from cryton.lib.util import exceptions, util, logger, constants
 from cryton.lib.models import worker
 
 
-def create_session(plan_execution_id: Union[Type[int], int], session_id: str,
+def create_session(plan_execution_id: Union[Type[int], int], session_id: str, session_type: str,
                    session_name: str = None) -> SessionModel:
     """
 
     :param plan_execution_id:
     :param session_id:
     :param session_name:
+    :param session_type:
     :return:
     """
-    logger.logger.debug("Creating session", session_id=session_id, session_name=session_name)
+    logger.logger.debug("Creating session", session_id=session_id, session_type=session_type, session_name=session_name)
     if not PlanExecutionModel.objects.filter(id=plan_execution_id).exists():
         raise exceptions.PlanExecutionDoesNotExist(plan_execution_id=str(plan_execution_id))
 
     sess_obj = SessionModel.objects.create(plan_execution_id=plan_execution_id,
                                            session_name=session_name,
                                            session_id=session_id,
+                                           session_type=session_type,
                                            )
 
     return sess_obj

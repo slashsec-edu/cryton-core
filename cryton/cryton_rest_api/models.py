@@ -53,6 +53,7 @@ class StepModel(InstanceModel):
     stage_model = models.ForeignKey(StageModel, on_delete=models.CASCADE, related_name='steps')
     step_type = models.TextField(null=False, blank=False)
     arguments = models.JSONField(null=False, blank=False)
+    info = models.JSONField(null=False, blank=False)
     is_init = models.BooleanField(default=False)
     is_final = models.BooleanField(default=False)
     executor = models.TextField(null=True, blank=True)
@@ -133,9 +134,21 @@ class StepExecutionModel(ExecutionModel):
 
 
 class SessionModel(models.Model):
+    MSF_SHELL_TYPE = "MSF_SHELL"
+    MSF_METERPRETER_TYPE = "MSF_METERPRETER"
+
+    SESSION_TYPES = [
+        (MSF_SHELL_TYPE, "Metasploit console shell session"),
+        (MSF_METERPRETER_TYPE, "Metasploit meterpreter session")
+    ]
+
     plan_execution = models.ForeignKey(PlanExecutionModel, on_delete=models.CASCADE, related_name='namedsessionmodel')
     session_name = models.TextField(null=True, blank=True, default=None)
     session_id = models.TextField(default='0')
+    session_type = models.CharField(
+        max_length=50,
+        choices=SESSION_TYPES,
+    )
 
     class Meta:
         db_table = 'namedsessionmodel'

@@ -22,6 +22,8 @@ from cryton.lib.models import worker, session
 
 from dataclasses import dataclass, asdict
 
+from cryton.lib.util.exceptions import SessionObjectDoesNotExist
+
 
 @dataclass
 class StepReport:
@@ -37,6 +39,7 @@ class StepReport:
     evidence_file: str
     result: str
     valid: bool
+    info: dict
 
 
 @dataclass
@@ -308,6 +311,7 @@ class Step:
             'step_type': str,
             SchemaOptional('is_init'): bool,
             'arguments': dict,
+            SchemaOptional('info'): dict,
             SchemaOptional('next'): list,
             SchemaOptional('executor'): str,
             SchemaOptional('output_mapping'): list,
@@ -636,6 +640,9 @@ class StepExecution:
         # Check if any session should be used
         use_named_session = step_obj.arguments.use_named_session
         use_any_session_to_target = step_obj.arguments.use_any_session_to_target
+
+        create_session_name = step_obj.arguments.create_named_session
+
         if use_named_session is not None:
             # Throws SessionObjectDoesNotExist
             session_msf_id = session.get_msf_session_id(use_named_session, plan_execution_id)
@@ -679,6 +686,9 @@ class StepExecution:
             if step_obj.step_type == constants.STEP_TYPE_EXECUTE_ON_WORKER:
                 step_arguments.attack_module_args.update({constants.SESSION_ID: session_msf_id})
 
+        if create_session_name and step_obj.step_type == constants.STEP_TYPE_EXECUTE_ON_WORKER:
+            step_arguments.attack_module_args.update({constants.CREATE_NAMED_SESSION: create_session_name})
+
         # Execute Attack module
         try:
             correlation_id = self._execute_step(rabbit_channel, step_obj.step_type,
@@ -698,8 +708,10 @@ class StepExecution:
     def report(self) -> dict:
         report_obj = StepReport(id=self.model.id, step_name=self.model.step_model.name, state=self.state,
                                 start_time=self.start_time, finish_time=self.finish_time, result=self.result,
-                                mod_out=self.mod_out, mod_err=self.mod_err, std_out=self.std_out,
-                                std_err=self.std_err, evidence_file=self.evidence_file, valid=self.valid)
+                                mod_out=self.mod_out, mod_err=self.mod_err,
+                                std_out=self.std_out,
+                                std_err=self.std_err, evidence_file=self.evidence_file, valid=self.valid,
+                                info=self.model.step_model.info)
 
         return asdict(report_obj)
 
@@ -835,16 +847,38 @@ class StepExecution:
         return None
 
     def postprocess(self, ret_vals: dict) -> None:
+        """
+        Perform necessary things after executing Step like creating named sessions, update state, update successors
+        and save Step Execution Output.
+
+        :param ret_vals: output from Step Execution
+        :return: None
+        """
         logger.logger.debug("Postprocessing Step", step_id=self.model.step_model_id)
         step_obj = Step(step_model_id=self.model.step_model.id)
 
         # Check if any named session should be created:
         create_named_session = step_obj.arguments.create_named_session
         if create_named_session is not None:
-            msf_session_id = ret_vals.get(constants.RET_SESSION_ID)
-            if msf_session_id is not None:
-                session.create_session(self.model.stage_execution.plan_execution_id, msf_session_id,
-                                       create_named_session)
+            session_id = ret_vals.get(constants.RET_SESSION_ID)
+            session_type = ret_vals.get(constants.RET_SESSION_TYPE)
+            logger.logger.debug("Creating session", session_name=create_named_session, session_id=session_id,
+                                session_type=session_type)
+            execution_id = self.model.stage_execution.plan_execution_id
+
+            # TODO SIEMENS: Workaround because when using stages it sometimes happens that the sessions are stored
+            #  twice within the DB
+            session_exists = True
+            try:
+                session.get_msf_session_id(session_name=create_named_session, plan_execution_id=execution_id)
+            except SessionObjectDoesNotExist:
+                session_exists = False
+
+            if session_id is not None and session_type is not None and not session_exists:
+                session.create_session(execution_id, session_id, session_type, create_named_session)
+            else:
+                logger.logger.info("Could not create session", session_name=create_named_session, session_id=session_id,
+                                   session_type=session_type)
 
         # Store job result
         step_result = constants.RET_CODE_ENUM.get(ret_vals.get(constants.RETURN_CODE))
@@ -857,12 +891,12 @@ class StepExecution:
         self.state = states.FINISHED
 
         # update Successors parents
-        succ_list = self.get_successors()
+        successor_list = self.get_successors()
 
-        for succ_step in succ_list:
-            succ_step_execution_model = StepExecutionModel.objects.get(
-                step_model_id=succ_step.id, stage_execution_id=self.model.stage_execution_id, state=states.PENDING)
-            StepExecution(step_execution_id=succ_step_execution_model.id).parent_id = self.model.id
+        for successor_step in successor_list:
+            successor_step_execution_model = StepExecutionModel.objects.get(
+                step_model_id=successor_step.id, stage_execution_id=self.model.stage_execution_id, state=states.PENDING)
+            StepExecution(step_execution_id=successor_step_execution_model.id).parent_id = self.model.id
 
         # Store file, if present in returned object
         ret_file = ret_vals.get(constants.RET_FILE)

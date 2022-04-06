@@ -51,6 +51,7 @@ EMPIRE_SHELL_COMMAND = 'shell_command'
 
 # Session system keywords
 SESSION_ID = 'session_id'
+SESSION_TYPE = 'session_type'
 CREATE_NAMED_SESSION = 'create_named_session'
 USE_NAMED_SESSION = 'use_named_session'
 USE_ANY_SESSION_TO_TARGET = 'use_any_session_to_target'
@@ -62,6 +63,7 @@ STEP_TYPE_EXECUTE_ON_AGENT = 'empire/execute-on-agent'
 
 # Step ret
 RET_SESSION_ID = SESSION_ID
+RET_SESSION_TYPE = SESSION_TYPE
 RET_FILE = 'file'
 RET_FILE_NAME = 'file_name'
 RET_FILE_CONTENT = 'file_content'
@@ -84,7 +86,6 @@ RET_CODE_ENUM = {
 # Successor related
 VALID_SUCCESSOR_TYPES = [STATE, RESULT, ANY, STD_OUT, STD_ERR, MOD_OUT, MOD_ERR]
 VALID_SUCCESSOR_RESULTS = [RESULT_OK, RESULT_FAIL, RESULT_EXCEPTION, RESULT_TERMINATED]
-
 # Queue types
 Q_ATTACK = 'attack'
 Q_CONTROL = 'control'
