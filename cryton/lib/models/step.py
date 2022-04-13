@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from threading import Lock
 from typing import Union, Type, Optional
 import re
 import copy
@@ -370,6 +371,7 @@ class StepExecution:
         (optional) step_execution_id: int - for retrieving existing execution
         step_model_id: int - for creating new execution
         """
+        self.create_session_lock = Lock()
         step_execution_id = kwargs.get('step_execution_id')
         if step_execution_id is not None:
             try:
@@ -868,6 +870,8 @@ class StepExecution:
 
             # TODO SIEMENS: Workaround because when using stages it sometimes happens that the sessions are stored
             #  twice within the DB
+            self.create_session_lock.acquire()
+
             session_exists = True
             try:
                 session.get_msf_session_id(session_name=create_named_session, plan_execution_id=execution_id)
@@ -879,6 +883,8 @@ class StepExecution:
             else:
                 logger.logger.info("Could not create session", session_name=create_named_session, session_id=session_id,
                                    session_type=session_type)
+
+            self.create_session_lock.release()
 
         # Store job result
         step_result = constants.RET_CODE_ENUM.get(ret_vals.get(constants.RETURN_CODE))
