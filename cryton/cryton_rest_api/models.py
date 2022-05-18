@@ -31,6 +31,7 @@ class InstanceModel(AdvancedModel):
 class PlanModel(InstanceModel):
     owner = models.TextField(blank=True, null=True)
     evidence_dir = models.TextField(blank=True, null=True)
+    plan_info = models.JSONField(null=False, blank=False)
     plan_dict = models.JSONField()
 
     class Meta:

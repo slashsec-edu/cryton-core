@@ -1,6 +1,8 @@
 plan:
   name: Advanced example
   owner: test name
+  plan_info:
+    description: "Detailed description about this scenario."
   stages:
   - name: stage-local-information-gathering
     trigger_type: delta

@@ -77,6 +77,16 @@ class Plan:
         model.save()
 
     @property
+    def plan_info(self) -> dict:
+        return self.model.plan_info
+
+    @plan_info.setter
+    def plan_info(self, value: dict):
+        model = self.model
+        model.plan_info = value
+        model.save()
+
+    @property
     def plan_dict(self) -> dict:
         return self.model.plan_dict
 
@@ -125,6 +135,7 @@ class Plan:
             'name': str,
             SchemaOptional('owner'): str,
             SchemaOptional('evidence_dir'): str,
+            SchemaOptional('plan_info'): dict,
             'stages': And(list, lambda l: len(l) > 0)
         })
 
